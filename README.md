@@ -87,13 +87,3 @@ Planned development areas include:
 5. Interviews, Follow-ups, and Reminders
 6. Analytics Dashboard
 7. Testing, Security, Documentation, and Deployment
-
-## AI Usage Guidelines
-
-The AI functionality will assist users in analyzing and improving their resumes while following these rules:
-
-- Do not fabricate experience, skills, education, tools, or accomplishments
-- Clearly identify skills already demonstrated in the resume
-- Identify requirements that are missing or unclear
-- Provide wording suggestions only when supported by the user's existing experience
-- Treat the match score as an internal JobMatch AI score, not an official ATS score
