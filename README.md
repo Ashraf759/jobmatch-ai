@@ -1,6 +1,6 @@
 # JobMatch AI
 
-JobMatch AI is an AI-powered job application tracking and resume tailoring platform developed as a capstone project for MSCS 3999 at Clark University.
+JobMatch AI is an AI-powered job application tracking and resume tailoring platform.
 
 ## Team Members
 
@@ -17,8 +17,10 @@ Users will be able to:
 - Add and manage job applications
 - Track application status
 - Upload and manage multiple resume versions
+- Save the resume version used for each application
 - Compare resumes against job descriptions
 - Identify matching skills and missing requirements
+- View important keywords and resume gaps
 - Receive AI-assisted resume wording suggestions
 - Track interviews and follow-ups
 - Receive reminders
@@ -33,18 +35,26 @@ Users will be able to:
 - Tailwind CSS
 
 ### Backend
-- Python
-- FastAPI
+- Next.js Server Actions
+- Next.js API Routes
 
-### Database
+### Database, Authentication, and Storage
 - PostgreSQL
-- SQLAlchemy
-- Alembic
+- Supabase
+- Supabase Auth
+- Supabase Storage
 
 ### AI / NLP
-- Python
-- LLM API
+- Claude API
+- Structured JSON responses
 - Deterministic keyword and skill matching
+
+### Resume Processing
+- PDF parsing
+- DOCX parsing
+
+### Data Visualization
+- Recharts
 
 ### Development Tools
 - Git
@@ -52,14 +62,17 @@ Users will be able to:
 - Jira
 - VS Code
 - Postman
-- Docker
-- Docker Compose
+- Figma
+
+### Deployment
+- Vercel
+- Supabase
 
 ## Project Status
 
 Current Phase: Agile Planning and Initial Project Setup
 
-The repository currently contains sample code and initial project structure. Development will proceed incrementally using Agile Scrum methodology.
+The repository currently contains sample code, documentation, and the initial project structure. Development will proceed incrementally using Agile Scrum methodology.
 
 ## Agile Development
 
@@ -68,12 +81,19 @@ The project is being developed using two-week Scrum sprints.
 Planned development areas include:
 
 1. Authentication and Job Application Tracking
-2. Resume Upload and Job Matching
-3. Resume Tailoring and Version Management
-4. Analytics, Reminders, Testing, and Deployment
+2. Resume Upload and Management
+3. AI Resume and Job Description Analysis
+4. Resume Tailoring and Version Management
+5. Interviews, Follow-ups, and Reminders
+6. Analytics Dashboard
+7. Testing, Security, Documentation, and Deployment
 
-## Academic Project
+## AI Usage Guidelines
 
-MSCS 3999 Capstone  
-Clark University  
-Fall 2026
+The AI functionality will assist users in analyzing and improving their resumes while following these rules:
+
+- Do not fabricate experience, skills, education, tools, or accomplishments
+- Clearly identify skills already demonstrated in the resume
+- Identify requirements that are missing or unclear
+- Provide wording suggestions only when supported by the user's existing experience
+- Treat the match score as an internal JobMatch AI score, not an official ATS score
