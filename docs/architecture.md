@@ -4,7 +4,7 @@ JobMatch AI will follow a layered full-stack architecture.
 
 ## Frontend
 
-Next.js / React / TypeScript
+Next.js / React / TypeScript / Tailwind CSS
 
 Responsibilities:
 
@@ -16,19 +16,19 @@ Responsibilities:
 
 ## Backend
 
-Python / FastAPI
+Next.js Server Actions / Next.js API Routes
 
 Responsibilities:
 
-- REST APIs
 - Business logic
 - Data validation
+- Database operations
 - AI service integration
 - Resume processing
 
 ## Database
 
-PostgreSQL
+Supabase PostgreSQL
 
 Initial entities are expected to include:
 
@@ -41,9 +41,17 @@ Initial entities are expected to include:
 - Interviews
 - Reminders
 
+## Authentication and Storage
+
+Supabase will provide:
+
+- User authentication
+- Session management
+- Resume file storage
+
 ## AI Layer
 
-The AI layer will compare resume content with job descriptions and return structured analysis including:
+Claude API will be used to compare resume content with job descriptions and return structured analysis including:
 
 - Matching skills
 - Missing skills
@@ -56,4 +64,7 @@ AI suggestions must not fabricate user experience, education, skills, or accompl
 
 ## Deployment
 
-The deployment architecture will be finalized during a later project phase.
+The application will be deployed using:
+
+- Vercel
+- Supabase
