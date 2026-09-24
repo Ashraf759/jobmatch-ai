@@ -1,16 +1,16 @@
 # JobMatch AI Backend
 
-The backend of JobMatch AI will be developed using Python and FastAPI.
+The backend of JobMatch AI will be developed using Next.js server-side features and Supabase.
 
 Primary responsibilities will include:
 
 - Authentication support
-- Job application APIs
+- Job application management
 - Resume processing
 - AI resume-job analysis
-- Resume tailoring services
-- Analytics APIs
+- Resume tailoring
 - Reminder management
+- Analytics data
 - Database access
 
-PostgreSQL will be used as the primary database.
+Supabase PostgreSQL will be used as the primary database.
