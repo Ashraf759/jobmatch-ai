@@ -13,6 +13,9 @@ export default async function DashboardPage() {
     <div style={{ maxWidth: 400, margin: "80px auto" }}>
       <h1>Dashboard</h1>
       <p>Logged in as {data.user.email}</p>
+      <p style={{ marginTop: 16 }}>
+        <a href="/tracker">Go to Job Application Tracker</a>
+      </p>
     </div>
   );
 }
