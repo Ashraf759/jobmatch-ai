@@ -1,29 +1,32 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Space_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
+  weight: ["500", "700"],
+  variable: "--font-space-grotesk",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-inter",
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "JobMatch AI",
-description: "AI-powered job application tracking and resume matching platform.",
+  description: "AI-powered job application tracking and resume matching platform.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

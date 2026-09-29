@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import Nav from "@/components/Nav";
 
 type Application = {
   id: string;
@@ -10,17 +11,28 @@ type Application = {
   role: string;
   status: string;
   date_applied: string;
-  notes: string | null;
 };
 
-const STATUSES = ["applied", "interview", "offer", "rejected"];
+const STATUSES = [
+  { value: "applied", label: "Applied", color: "border-applied text-applied" },
+  { value: "interview", label: "Interview", color: "border-signal text-signal" },
+  { value: "offer", label: "Offer", color: "border-offer text-offer" },
+  { value: "rejected", label: "Rejected", color: "border-rejected text-rejected" },
+];
+
+const STRIPE: Record<string, string> = {
+  applied: "border-l-applied",
+  interview: "border-l-signal",
+  offer: "border-l-offer",
+  rejected: "border-l-rejected",
+};
 
 export default function TrackerPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | undefined>();
   const router = useRouter();
   const supabase = createClient();
 
@@ -30,9 +42,7 @@ export default function TrackerPage() {
       .select("*")
       .order("date_applied", { ascending: false });
 
-    if (!error && data) {
-      setApplications(data);
-    }
+    if (!error && data) setApplications(data);
     setLoading(false);
   }
 
@@ -43,6 +53,7 @@ export default function TrackerPage() {
         router.push("/login");
         return;
       }
+      setEmail(data.user.email);
       loadApplications();
     }
     checkUserAndLoad();
@@ -74,72 +85,93 @@ export default function TrackerPage() {
     loadApplications();
   }
 
-  if (loading) return <p style={{ padding: 40 }}>Loading...</p>;
+  if (loading) return <p className="p-10 text-ink-muted">Loading...</p>;
+
+  const counts = {
+    total: applications.length,
+    applied: applications.filter((a) => a.status === "applied").length,
+    interview: applications.filter((a) => a.status === "interview").length,
+    offer: applications.filter((a) => a.status === "offer").length,
+  };
 
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto", padding: 20 }}>
-      <h1>Job Application Tracker</h1>
+    <div>
+      <Nav email={email} />
+      <div className="max-w-2xl mx-auto px-6 py-10">
+        <h1 className="font-display font-bold text-2xl mb-1">Applications</h1>
+        <p className="text-ink-muted text-sm mb-6">
+          {counts.total} tracked · {counts.applied} applied · {counts.interview} interviewing · {counts.offer} offers
+        </p>
 
-      <form
-        onSubmit={handleAdd}
-        style={{ display: "flex", gap: 8, marginBottom: 24 }}
-      >
-        <input
-          placeholder="Company"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          required
-          style={{ flex: 1, padding: 8 }}
-        />
-        <input
-          placeholder="Role"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          required
-          style={{ flex: 1, padding: 8 }}
-        />
-        <button type="submit" style={{ padding: 8 }}>
-          Add
-        </button>
-      </form>
+        <form onSubmit={handleAdd} className="flex gap-2 mb-8">
+          <input
+            placeholder="Company"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            required
+            className="flex-1 border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
+          />
+          <input
+            placeholder="Role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            required
+            className="flex-1 border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
+          />
+          <button
+            type="submit"
+            className="bg-signal text-white rounded px-4 py-2 font-medium hover:opacity-90"
+          >
+            Add
+          </button>
+        </form>
 
-      {applications.length === 0 && <p>No applications yet.</p>}
+        {applications.length === 0 && (
+          <p className="text-ink-muted text-sm">
+            Nothing tracked yet. Add your first application above.
+          </p>
+        )}
 
-      {applications.map((app) => (
-        <div
-          key={app.id}
-          style={{
-            border: "1px solid #ccc",
-            borderRadius: 6,
-            padding: 12,
-            marginBottom: 8,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <strong>{app.company}</strong> — {app.role}
-            <div style={{ fontSize: 12, color: "#888" }}>
-              Applied {app.date_applied}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select
-              value={app.status}
-              onChange={(e) => handleStatusChange(app.id, e.target.value)}
-              style={{ padding: 4 }}
+        <div className="space-y-3">
+          {applications.map((app) => (
+            <div
+              key={app.id}
+              className={`border border-line ${STRIPE[app.status]} border-l-4 rounded px-4 py-3 flex items-center justify-between bg-white`}
             >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <button onClick={() => handleDelete(app.id)}>Delete</button>
-          </div>
+              <div>
+                <p className="font-display font-semibold">{app.company}</p>
+                <p className="text-sm text-ink-muted">
+                  {app.role} · Applied {app.date_applied}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  {STATUSES.map((s) => (
+                    <button
+                      key={s.value}
+                      onClick={() => handleStatusChange(app.id, s.value)}
+                      className={`text-xs px-2 py-1 rounded border ${
+                        app.status === s.value
+                          ? s.color
+                          : "border-line text-ink-muted"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => handleDelete(app.id)}
+                  className="text-xs text-ink-muted hover:text-rejected ml-2"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
