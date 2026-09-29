@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Inter } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-space-grotesk",
+  variable: "--font-bricolage",
+  display: "swap",
 });
 
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-inter",
+  variable: "--font-geist",
+  display: "swap",
 });
 
-export const metadata = {
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
   title: "JobMatch AI",
   description: "AI-powered job application tracking and resume matching platform.",
 };
@@ -25,7 +31,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
+    <html
+      lang="en"
+      className={`${bricolage.variable} ${geist.variable} ${geistMono.variable}`}
+    >
       <body>{children}</body>
     </html>
   );
