@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import AuthShell, { ArrowIcon, authButtonClass, authInputClass } from "@/components/AuthShell";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -30,63 +32,75 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
-          <h1 className="font-display font-bold text-2xl mb-2">Account created</h1>
-          <p className="text-ink-muted">
-            <a href="/login" className="text-signal">Log in</a> to start tracking.
-          </p>
+      <AuthShell mode="signup">
+        <div className="flex flex-col gap-5">
+          <div className="flex h-14 w-14 animate-pop items-center justify-center rounded-2xl bg-green-soft">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#155A43" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Account created.</h1>
+          <p className="text-[17px] leading-normal text-ink-2">Sign in to start tracking.</p>
+          <Link href="/login" className={authButtonClass}>
+            Sign in
+            <ArrowIcon />
+          </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <h1 className="font-display font-bold text-2xl mb-1">Create an account</h1>
-        <p className="text-ink-muted text-sm mb-6">
-          Start tracking applications in one place.
-        </p>
-
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
-            />
-          </div>
-
-          {error && <p className="text-rejected text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-signal text-white rounded py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "Creating account..." : "Sign up"}
-          </button>
-        </form>
-
-        <p className="text-sm text-ink-muted mt-6">
-          Already have an account? <a href="/login" className="text-signal">Log in</a>
+    <AuthShell mode="signup">
+      <div className="flex flex-col gap-2.5">
+        <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Start your search.</h1>
+        <p className="text-[17px] leading-normal text-ink-2">
+          Create a free account and add your first role in seconds.
         </p>
       </div>
-    </div>
+
+      <form onSubmit={handleSignup} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="email" className="text-sm font-semibold">Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="you@clarku.edu"
+            autoComplete="email"
+            className={authInputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="text-sm font-semibold">Password</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            placeholder="At least 6 characters"
+            autoComplete="new-password"
+            className={authInputClass}
+          />
+        </div>
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-rust-soft px-4 py-3 text-sm text-rust-ink">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={loading} className={authButtonClass}>
+          {loading ? "Creating account..." : "Create account"}
+          {!loading && <ArrowIcon />}
+        </button>
+      </form>
+
+      <p className="text-[13px] leading-normal text-muted">Your applications are private to your account.</p>
+    </AuthShell>
   );
 }

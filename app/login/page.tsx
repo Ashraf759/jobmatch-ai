@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import AuthShell, { ArrowIcon, authButtonClass, authInputClass } from "@/components/AuthShell";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -30,50 +31,53 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <h1 className="font-display font-bold text-2xl mb-1">Log in</h1>
-        <p className="text-ink-muted text-sm mb-6">
-          Pick up where you left off.
-        </p>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full border border-line rounded px-3 py-2 bg-white focus:outline-2 focus:outline-signal"
-            />
-          </div>
-
-          {error && <p className="text-rejected text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-signal text-white rounded py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "Logging in..." : "Log in"}
-          </button>
-        </form>
-
-        <p className="text-sm text-ink-muted mt-6">
-          No account? <a href="/signup" className="text-signal">Sign up</a>
-        </p>
+    <AuthShell mode="login">
+      <div className="flex flex-col gap-2.5">
+        <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Welcome back.</h1>
+        <p className="text-[17px] leading-normal text-ink-2">Sign in to see your pipeline.</p>
       </div>
-    </div>
+
+      <form onSubmit={handleLogin} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="email" className="text-sm font-semibold">Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="you@clarku.edu"
+            autoComplete="email"
+            className={authInputClass}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="text-sm font-semibold">Password</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="Your password"
+            autoComplete="current-password"
+            className={authInputClass}
+          />
+        </div>
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-rust-soft px-4 py-3 text-sm text-rust-ink">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={loading} className={authButtonClass}>
+          {loading ? "Signing in..." : "Sign in"}
+          {!loading && <ArrowIcon />}
+        </button>
+      </form>
+
+      <p className="text-[13px] leading-normal text-muted">Your applications are private to your account.</p>
+    </AuthShell>
   );
 }
