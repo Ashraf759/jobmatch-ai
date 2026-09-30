@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import AuthShell, { ArrowIcon, authButtonClass, authInputClass } from "@/components/AuthShell";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -16,10 +18,7 @@ export default function SignupPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signUp({ email, password });
 
     setLoading(false);
 
@@ -33,48 +32,75 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div style={{ maxWidth: 400, margin: "80px auto" }}>
-        <h1>Check your account</h1>
-        <p>
-          Your account was created. <a href="/login">Log in</a>
-        </p>
-      </div>
+      <AuthShell mode="signup">
+        <div className="flex flex-col gap-5">
+          <div className="flex h-14 w-14 animate-pop items-center justify-center rounded-2xl bg-green-soft">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#155A43" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Account created.</h1>
+          <p className="text-[17px] leading-normal text-ink-2">Sign in to start tracking.</p>
+          <Link href="/login" className={authButtonClass}>
+            Sign in
+            <ArrowIcon />
+          </Link>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "80px auto" }}>
-      <h1>Sign Up</h1>
-      <form onSubmit={handleSignup}>
-        <div style={{ marginBottom: 12 }}>
-          <label>Email</label>
+    <AuthShell mode="signup">
+      <div className="flex flex-col gap-2.5">
+        <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Start your search.</h1>
+        <p className="text-[17px] leading-normal text-ink-2">
+          Create a free account and add your first role in seconds.
+        </p>
+      </div>
+
+      <form onSubmit={handleSignup} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="email" className="text-sm font-semibold">Email</label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ display: "block", width: "100%", padding: 8 }}
+            placeholder="you@clarku.edu"
+            autoComplete="email"
+            className={authInputClass}
           />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>Password</label>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="text-sm font-semibold">Password</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
-            style={{ display: "block", width: "100%", padding: 8 }}
+            placeholder="At least 6 characters"
+            autoComplete="new-password"
+            className={authInputClass}
           />
         </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit" disabled={loading} style={{ padding: 8 }}>
-          {loading ? "Creating account..." : "Sign Up"}
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-rust-soft px-4 py-3 text-sm text-rust-ink">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={loading} className={authButtonClass}>
+          {loading ? "Creating account..." : "Create account"}
+          {!loading && <ArrowIcon />}
         </button>
       </form>
-      <p style={{ marginTop: 12 }}>
-        Already have an account? <a href="/login">Log in</a>
-      </p>
-    </div>
+
+      <p className="text-[13px] leading-normal text-muted">Your applications are private to your account.</p>
+    </AuthShell>
   );
 }

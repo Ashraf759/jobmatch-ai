@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import AuthShell, { ArrowIcon, authButtonClass, authInputClass } from "@/components/AuthShell";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,10 +18,7 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     setLoading(false);
 
@@ -33,37 +31,53 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "80px auto" }}>
-      <h1>Log In</h1>
-      <form onSubmit={handleLogin}>
-        <div style={{ marginBottom: 12 }}>
-          <label>Email</label>
+    <AuthShell mode="login">
+      <div className="flex flex-col gap-2.5">
+        <h1 className="font-display text-5xl font-bold leading-none tracking-[-0.04em]">Welcome back.</h1>
+        <p className="text-[17px] leading-normal text-ink-2">Sign in to see your pipeline.</p>
+      </div>
+
+      <form onSubmit={handleLogin} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="email" className="text-sm font-semibold">Email</label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ display: "block", width: "100%", padding: 8 }}
+            placeholder="you@clarku.edu"
+            autoComplete="email"
+            className={authInputClass}
           />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>Password</label>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="text-sm font-semibold">Password</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ display: "block", width: "100%", padding: 8 }}
+            placeholder="Your password"
+            autoComplete="current-password"
+            className={authInputClass}
           />
         </div>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <button type="submit" disabled={loading} style={{ padding: 8 }}>
-          {loading ? "Logging in..." : "Log In"}
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-rust-soft px-4 py-3 text-sm text-rust-ink">
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={loading} className={authButtonClass}>
+          {loading ? "Signing in..." : "Sign in"}
+          {!loading && <ArrowIcon />}
         </button>
       </form>
-      <p style={{ marginTop: 12 }}>
-        No account? <a href="/signup">Sign up</a>
-      </p>
-    </div>
+
+      <p className="text-[13px] leading-normal text-muted">Your applications are private to your account.</p>
+    </AuthShell>
   );
 }

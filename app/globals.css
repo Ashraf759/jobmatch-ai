@@ -1,26 +1,148 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* ---------- Surfaces & ink ---------- */
+  --color-paper: #f5f2eb;
+  --color-paper-2: #ece7dc;
+  --color-card: #fffdf8;
+  --color-line: #dcd5c7;
+  --color-muted: #5a5e69;
+  --color-ink-2: #3a3e48;
+  --color-ink: #14161b;
+  --color-ink-soft: #1e2129;
+  --color-ink-raised: #262a33;
+  --color-ink-line: #2e323c;
+  --color-ink-border: #343845;
+  --color-mist: #9aa0ad;
+  --color-fog: #c9cdd6;
+  --color-faint: #8a8e99;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* ---------- Signal (primary accent) ---------- */
+  --color-signal: #2a45d6;
+  --color-signal-deep: #1c2f9e;
+  --color-signal-soft: #e3e7fb;
+  --color-signal-glow: #7c93ff;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* ---------- Status colors: fill / soft / text ---------- */
+  --color-amber: #f0a93b;
+  --color-amber-soft: #fbebd0;
+  --color-amber-ink: #7a4f08;
+  --color-amber-deep: #9a6309;
+
+  --color-green: #1e7a5c;
+  --color-green-soft: #dcefe6;
+  --color-green-ink: #155a43;
+  --color-mint: #7fd1b0;
+
+  --color-rust: #a8412f;
+  --color-rust-soft: #f4deda;
+  --color-rust-ink: #8a3222;
+
+  --color-slate: #6b6f7a;
+  --color-slate-soft: #e8e6e1;
+  --color-slate-ink: #3a3e48;
+
+  /* ---------- Old names kept so un-restyled pages don't break ---------- */
+  --color-ink-muted: #5a5e69;
+  --color-signal-light: #e3e7fb;
+  --color-offer: #1e7a5c;
+  --color-rejected: #a8412f;
+  --color-applied: #2a45d6;
+
+  /* ---------- Fonts ---------- */
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* ---------- Motion ---------- */
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --animate-float-a: float-a 7s ease-in-out infinite;
+  --animate-float-b: float-b 8s ease-in-out infinite;
+  --animate-fade-up: fade-up 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-slide-in: slide-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pulse-ring: pulse-ring 2s infinite;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-toast: toast 5s ease-in-out infinite;
+  --animate-pop: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  --animate-scroll-up: scroll-up 28s linear infinite;
+
+  @keyframes float-a {
+    0%, 100% { transform: rotate(-5deg) translateY(0); }
+    50% { transform: rotate(-5deg) translateY(-12px); }
+  }
+  @keyframes float-b {
+    0%, 100% { transform: rotate(4deg) translateY(0); }
+    50% { transform: rotate(4deg) translateY(10px); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(42, 69, 214, 0.45); }
+    70% { box-shadow: 0 0 0 10px rgba(42, 69, 214, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(42, 69, 214, 0); }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes toast {
+    0%, 12% { opacity: 0; transform: translateY(16px); }
+    20%, 80% { opacity: 1; transform: translateY(0); }
+    90%, 100% { opacity: 0; transform: translateY(-8px); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes scroll-up {
+    from { transform: translateY(0); }
+    to { transform: translateY(-50%); }
   }
 }
 
+/* ---------- Dot-grid texture for ink panels ---------- */
+@utility bg-dots {
+  background-image: radial-gradient(circle, rgba(245, 242, 235, 0.08) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+/* ---------- Base ---------- */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* Respect people who turn off motion in their system settings */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
