@@ -86,4 +86,4 @@ Planned development areas include:
 4. Resume Tailoring and Version Management
 5. Interviews, Follow-ups, and Reminders
 6. Analytics Dashboard
-7. Testing, Security, Documentation, and Deployment
+7. Testing, Security, Documentation, and Deployment.
