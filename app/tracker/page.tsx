@@ -16,10 +16,41 @@ type Application = {
 type StatusInfo = { value: string; label: string; dot: string; chip: string; hex: string };
 
 const STATUSES: StatusInfo[] = [
-  { value: "applied", label: "Applied", dot: "bg-signal", chip: "bg-signal-soft text-signal-deep", hex: "#2A45D6" },
-  { value: "interview", label: "Interview", dot: "bg-amber", chip: "bg-amber-soft text-amber-ink", hex: "#F0A93B" },
-  { value: "offer", label: "Offer", dot: "bg-green", chip: "bg-green-soft text-green-ink", hex: "#1E7A5C" },
-  { value: "rejected", label: "Rejected", dot: "bg-rust", chip: "bg-rust-soft text-rust-ink", hex: "#A8412F" },
+  {
+    value: "saved",
+    label: "Saved",
+    dot: "bg-slate",
+    chip: "bg-slate-soft text-slate-ink",
+    hex: "#6B6F7A",
+  },
+  {
+    value: "applied",
+    label: "Applied",
+    dot: "bg-signal",
+    chip: "bg-signal-soft text-signal-deep",
+    hex: "#2A45D6",
+  },
+  {
+    value: "interview",
+    label: "Interview",
+    dot: "bg-amber",
+    chip: "bg-amber-soft text-amber-ink",
+    hex: "#F0A93B",
+  },
+  {
+    value: "offer",
+    label: "Offer",
+    dot: "bg-green",
+    chip: "bg-green-soft text-green-ink",
+    hex: "#1E7A5C",
+  },
+  {
+    value: "rejected",
+    label: "Rejected",
+    dot: "bg-rust",
+    chip: "bg-rust-soft text-rust-ink",
+    hex: "#A8412F",
+  },
 ];
 
 function statusInfo(value: string): StatusInfo {
@@ -88,6 +119,8 @@ export default function TrackerPage() {
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
+  const [status, setStatus] = useState("saved");
+  const [addError, setAddError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | undefined>();
   // Display-only state for the new design
   const [filter, setFilter] = useState("all");
@@ -121,17 +154,25 @@ export default function TrackerPage() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    setAddError(null);
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
 
-    await supabase.from("applications").insert({
+    const { error } = await supabase.from("applications").insert({
       company,
       role,
+      status,
       user_id: data.user.id,
     });
 
+    if (error) {
+      setAddError(error.message);
+      return;
+    }
+
     setCompany("");
     setRole("");
+    setStatus("saved");
     setShowAdd(false);
     loadApplications();
   }
@@ -229,6 +270,19 @@ export default function TrackerPage() {
                 className="h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] transition placeholder:text-faint focus:border-signal focus:shadow-[0_0_0_4px_rgba(42,69,214,0.15)] focus:outline-none"
               />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="application-status" className="text-[13px] font-semibold">Status</label>
+              <select
+                id="application-status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] focus:border-signal focus:outline-none"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
             <button
               type="submit"
               className="h-[46px] cursor-pointer rounded-xl bg-ink px-[22px] text-[15px] font-semibold text-paper transition hover:-translate-y-px"
@@ -236,6 +290,9 @@ export default function TrackerPage() {
               Save role
             </button>
           </form>
+        )}
+        {showAdd && addError && (
+          <p role="alert" className="text-sm text-rust-ink">{addError}</p>
         )}
 
         {/* ---------- Stat tiles ---------- */}
