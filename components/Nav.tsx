@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-type Active = "dashboard" | "tracker";
+type Active = "dashboard" | "tracker" | "resumes";
 
 function DashIcon() {
   return (
@@ -70,6 +70,8 @@ export default function Nav({ email, active }: { email?: string; active?: Active
       on ? "bg-ink-raised font-semibold text-white" : "text-fog hover:bg-ink-soft hover:text-white"
     }`;
 
+  const mobileClass = (on: boolean) => (on ? "font-semibold text-white" : "text-fog");
+
   return (
     <>
       {/* ---------- Desktop sidebar ---------- */}
@@ -88,11 +90,10 @@ export default function Nav({ email, active }: { email?: string; active?: Active
             <ListIcon />
             Applications
           </Link>
-          <span aria-disabled="true" className="flex items-center gap-3 rounded-xl p-3 text-mist">
+          <Link href="/resumes" aria-current={active === "resumes" ? "page" : undefined} className={linkClass(active === "resumes")}>
             <DocIcon />
             Résumés
-            <span className="ml-auto font-mono text-[10px]">SOON</span>
-          </span>
+          </Link>
           <span aria-disabled="true" className="flex items-center gap-3 rounded-xl p-3 text-mist">
             <MatchIcon />
             AI Match
@@ -121,18 +122,15 @@ export default function Nav({ email, active }: { email?: string; active?: Active
       </aside>
 
       {/* ---------- Mobile top bar ---------- */}
-      <div className="flex items-center justify-between gap-4 bg-ink px-5 py-4 text-paper lg:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-ink px-5 py-4 text-paper lg:hidden">
         <Link href="/dashboard" className="flex items-center gap-2 text-paper">
           <LogoMark size={26} />
           <span className="font-display text-lg font-bold tracking-[-0.02em]">JobMatch</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/dashboard" className={active === "dashboard" ? "font-semibold text-white" : "text-fog"}>
-            Dashboard
-          </Link>
-          <Link href="/tracker" className={active === "tracker" ? "font-semibold text-white" : "text-fog"}>
-            Applications
-          </Link>
+          <Link href="/dashboard" className={mobileClass(active === "dashboard")}>Dashboard</Link>
+          <Link href="/tracker" className={mobileClass(active === "tracker")}>Applications</Link>
+          <Link href="/resumes" className={mobileClass(active === "resumes")}>Résumés</Link>
           <button type="button" onClick={handleSignOut} className="cursor-pointer text-fog">
             Sign out
           </button>

@@ -44,7 +44,10 @@ export default async function DashboardPage() {
         </section>
 
         <div className="grid animate-fade-up grid-cols-1 gap-5 [animation-delay:240ms] md:grid-cols-2">
-          <article className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-8">
+          <Link
+            href="/resumes"
+            className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-8 text-ink transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_40px_-24px_rgba(20,22,27,0.35)]"
+          >
             <div className="flex items-center justify-between">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-signal-soft text-signal">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,13 +55,18 @@ export default async function DashboardPage() {
                   <path d="M14 3v5h5M9 13h6M9 17h4" />
                 </svg>
               </div>
-              <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-muted">COMING SOON</span>
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-signal">
+                Open
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
             </div>
             <h3 className="font-display text-2xl font-bold tracking-[-0.02em]">Résumés</h3>
             <p className="text-[15px] leading-[1.55] text-ink-2">
-              Upload your résumé once and keep versions for different kinds of roles.
+              Upload your résumés as PDF or Word files, and view or remove them anytime.
             </p>
-          </article>
+          </Link>
 
           <article className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-8">
             <div className="flex items-center justify-between">
