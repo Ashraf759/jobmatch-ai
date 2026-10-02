@@ -3,6 +3,20 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import Nav from "@/components/Nav";
 
+function OpenArrow() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-signal">
+      Open
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+        <path d="M5 12h14M13 6l6 6-6 6" />
+      </svg>
+    </span>
+  );
+}
+
+const cardClass =
+  "flex flex-col gap-4 rounded-3xl border border-line bg-card p-8 text-ink transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_40px_-24px_rgba(20,22,27,0.35)]";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
@@ -43,11 +57,8 @@ export default async function DashboardPage() {
           </Link>
         </section>
 
-        <div className="grid animate-fade-up grid-cols-1 gap-5 [animation-delay:240ms] md:grid-cols-2">
-          <Link
-            href="/resumes"
-            className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-8 text-ink transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_40px_-24px_rgba(20,22,27,0.35)]"
-          >
+        <div className="grid animate-fade-up grid-cols-1 gap-5 [animation-delay:240ms] md:grid-cols-3">
+          <Link href="/resumes" className={cardClass}>
             <div className="flex items-center justify-between">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-signal-soft text-signal">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -55,12 +66,7 @@ export default async function DashboardPage() {
                   <path d="M14 3v5h5M9 13h6M9 17h4" />
                 </svg>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-signal">
-                Open
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </span>
+              <OpenArrow />
             </div>
             <h3 className="font-display text-2xl font-bold tracking-[-0.02em]">Résumés</h3>
             <p className="text-[15px] leading-[1.55] text-ink-2">
@@ -68,7 +74,23 @@ export default async function DashboardPage() {
             </p>
           </Link>
 
-          <article className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-8">
+          <Link href="/jobs" className={cardClass}>
+            <div className="flex items-center justify-between">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-soft text-green-ink">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="7" width="18" height="13" rx="2" />
+                  <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" />
+                </svg>
+              </div>
+              <OpenArrow />
+            </div>
+            <h3 className="font-display text-2xl font-bold tracking-[-0.02em]">Job postings</h3>
+            <p className="text-[15px] leading-[1.55] text-ink-2">
+              Save jobs you’re interested in by pasting the description or fetching it from a link.
+            </p>
+          </Link>
+
+          <Link href="/match" className={cardClass}>
             <div className="flex items-center justify-between">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-soft text-amber-ink">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -76,13 +98,13 @@ export default async function DashboardPage() {
                   <circle cx="15" cy="12" r="5" />
                 </svg>
               </div>
-              <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-muted">COMING SOON</span>
+              <OpenArrow />
             </div>
             <h3 className="font-display text-2xl font-bold tracking-[-0.02em]">AI Match</h3>
             <p className="text-[15px] leading-[1.55] text-ink-2">
               Score your résumé against a job posting and see which skills to add before you apply.
             </p>
-          </article>
+          </Link>
         </div>
       </main>
     </div>
