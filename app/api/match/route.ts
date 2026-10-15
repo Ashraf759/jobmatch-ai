@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60; // AI calls can take a little while
 
 const DAILY_LIMIT = 20; // real (non-demo) analyses per user per 24 hours
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 const MAX_JOB_CHARS = 20_000;
 const MAX_RESUME_CHARS = 30_000;
 
