@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-type Active = "dashboard" | "tracker" | "resumes";
+type Active = "dashboard" | "tracker" | "resumes" | "jobs";
 
 function DashIcon() {
   return (
@@ -30,6 +30,15 @@ function DocIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
       <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </svg>
+  );
+}
+
+function BriefcaseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" />
     </svg>
   );
 }
@@ -94,6 +103,10 @@ export default function Nav({ email, active }: { email?: string; active?: Active
             <DocIcon />
             Résumés
           </Link>
+          <Link href="/jobs" aria-current={active === "jobs" ? "page" : undefined} className={linkClass(active === "jobs")}>
+            <BriefcaseIcon />
+            Job postings
+          </Link>
           <span aria-disabled="true" className="flex items-center gap-3 rounded-xl p-3 text-mist">
             <MatchIcon />
             AI Match
@@ -127,10 +140,11 @@ export default function Nav({ email, active }: { email?: string; active?: Active
           <LogoMark size={26} />
           <span className="font-display text-lg font-bold tracking-[-0.02em]">JobMatch</span>
         </Link>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <Link href="/dashboard" className={mobileClass(active === "dashboard")}>Dashboard</Link>
           <Link href="/tracker" className={mobileClass(active === "tracker")}>Applications</Link>
           <Link href="/resumes" className={mobileClass(active === "resumes")}>Résumés</Link>
+          <Link href="/jobs" className={mobileClass(active === "jobs")}>Jobs</Link>
           <button type="button" onClick={handleSignOut} className="cursor-pointer text-fog">
             Sign out
           </button>
