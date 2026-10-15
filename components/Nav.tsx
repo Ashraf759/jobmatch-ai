@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-type Active = "dashboard" | "tracker" | "resumes" | "jobs";
+type Active = "dashboard" | "tracker" | "resumes" | "jobs" | "match";
 
 function DashIcon() {
   return (
@@ -107,11 +107,10 @@ export default function Nav({ email, active }: { email?: string; active?: Active
             <BriefcaseIcon />
             Job postings
           </Link>
-          <span aria-disabled="true" className="flex items-center gap-3 rounded-xl p-3 text-mist">
+          <Link href="/match" aria-current={active === "match" ? "page" : undefined} className={linkClass(active === "match")}>
             <MatchIcon />
             AI Match
-            <span className="ml-auto font-mono text-[10px]">SOON</span>
-          </span>
+          </Link>
         </nav>
 
         <div className="mt-auto flex flex-col gap-3 rounded-2xl bg-ink-soft p-4">
@@ -145,6 +144,7 @@ export default function Nav({ email, active }: { email?: string; active?: Active
           <Link href="/tracker" className={mobileClass(active === "tracker")}>Applications</Link>
           <Link href="/resumes" className={mobileClass(active === "resumes")}>Résumés</Link>
           <Link href="/jobs" className={mobileClass(active === "jobs")}>Jobs</Link>
+          <Link href="/match" className={mobileClass(active === "match")}>AI Match</Link>
           <button type="button" onClick={handleSignOut} className="cursor-pointer text-fog">
             Sign out
           </button>
