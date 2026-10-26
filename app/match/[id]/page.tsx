@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
 import AtsCard from "@/components/AtsCard";
+import TailorCard from "@/components/TailorCard";
+import CoverLetterCard from "@/components/CoverLetterCard";
 
 type MatchDetails = {
   summary: string;
@@ -351,6 +353,12 @@ export default function MatchResultPage() {
 
         {/* ---------- ATS check (SCRUM-32) ---------- */}
         <AtsCard matchId={row.id} canRun={canRerun} />
+
+        {/* ---------- Résumé tailoring (SCRUM-31) ---------- */}
+        <TailorCard matchId={row.id} canRun={canRerun} />
+
+        {/* ---------- Cover letter (SCRUM-34) ---------- */}
+        <CoverLetterCard matchId={row.id} canRun={canRerun} jobTitle={row.job_title} />
 
         {/* ---------- Suggestions checklist ---------- */}
         <section aria-label="Suggestions" className="flex animate-fade-in flex-col gap-4 rounded-3xl border border-line bg-card p-6 md:p-8">
