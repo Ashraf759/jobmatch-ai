@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
+import AtsCard from "@/components/AtsCard";
 
 type MatchDetails = {
   summary: string;
@@ -347,6 +348,9 @@ export default function MatchResultPage() {
             </section>
           </div>
         </div>
+
+        {/* ---------- ATS check (SCRUM-32) ---------- */}
+        <AtsCard matchId={row.id} canRun={canRerun} />
 
         {/* ---------- Suggestions checklist ---------- */}
         <section aria-label="Suggestions" className="flex animate-fade-in flex-col gap-4 rounded-3xl border border-line bg-card p-6 md:p-8">
