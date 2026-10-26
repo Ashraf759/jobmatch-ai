@@ -12,11 +12,17 @@ type Resume = {
   file_path: string;
   file_size: number | null;
   uploaded_at: string;
+  label: string | null;
+  is_default: boolean;
 };
 
 type Preview = { resume: Resume; html: string };
 
+// How each résumé version has done in AI Match so far
+type Stats = { count: number; best: number };
+
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_LABEL = 60;
 const ALLOWED_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -36,8 +42,24 @@ function fileKind(name: string) {
   return name.toLowerCase().endsWith(".pdf") ? "PDF" : "DOCX";
 }
 
+// "resume_frontend_v2.pdf" -> "resume frontend v2"
+function labelFromFileName(name: string) {
+  return name
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .slice(0, MAX_LABEL);
+}
+
+function scoreClasses(score: number) {
+  if (score >= 75) return "bg-green-soft text-green-ink";
+  if (score >= 50) return "bg-amber-soft text-amber-ink";
+  return "bg-rust-soft text-rust-ink";
+}
+
 export default function ResumesPage() {
   const [resumes, setResumes] = useState<Resume[]>([]);
+  const [stats, setStats] = useState<Record<string, Stats>>({});
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | undefined>();
   const [uploading, setUploading] = useState(false);
@@ -46,6 +68,9 @@ export default function ResumesPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -54,9 +79,22 @@ export default function ResumesPage() {
     const { data, error } = await supabase
       .from("resumes")
       .select("*")
+      .order("is_default", { ascending: false })
       .order("uploaded_at", { ascending: false });
 
     if (!error && data) setResumes(data);
+
+    // Count matches and find the best score for each résumé version
+    const { data: matches } = await supabase.from("match_results").select("resume_id, score");
+    const next: Record<string, Stats> = {};
+    for (const m of matches ?? []) {
+      if (!m.resume_id) continue;
+      const s = next[m.resume_id] ?? { count: 0, best: 0 };
+      s.count += 1;
+      s.best = Math.max(s.best, m.score ?? 0);
+      next[m.resume_id] = s;
+    }
+    setStats(next);
     setLoading(false);
   }
 
@@ -118,10 +156,13 @@ export default function ResumesPage() {
       return;
     }
 
+    // The very first résumé becomes the default automatically
     const { error: insertError } = await supabase.from("resumes").insert({
       file_name: file.name,
       file_path: path,
       file_size: file.size,
+      label: labelFromFileName(file.name) || null,
+      is_default: resumes.length === 0,
     });
 
     if (insertError) {
@@ -133,7 +174,7 @@ export default function ResumesPage() {
     }
 
     setUploading(false);
-    setNotice(`Uploaded ${file.name}`);
+    setNotice(`Uploaded ${file.name}. Give it a clear version name so you can tell it apart.`);
     loadResumes();
   }
 
@@ -148,6 +189,56 @@ export default function ResumesPage() {
     setDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
+  }
+
+  // ---------- Version name ----------
+  function startEditing(resume: Resume) {
+    setEditingId(resume.id);
+    setDraftLabel(resume.label ?? labelFromFileName(resume.file_name));
+  }
+
+  async function saveLabel(resume: Resume) {
+    const label = draftLabel.trim().slice(0, MAX_LABEL);
+    setEditingId(null);
+    if (label === (resume.label ?? "")) return;
+
+    setSavingId(resume.id);
+    setError(null);
+    const { error } = await supabase
+      .from("resumes")
+      .update({ label: label || null })
+      .eq("id", resume.id);
+    setSavingId(null);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setResumes((list) => list.map((r) => (r.id === resume.id ? { ...r, label: label || null } : r)));
+  }
+
+  // ---------- Default version ----------
+  async function makeDefault(resume: Resume) {
+    setSavingId(resume.id);
+    setError(null);
+    setNotice(null);
+
+    // Only one default per person: clear the old one first, then set the new one
+    const { error: clearError } = await supabase
+      .from("resumes")
+      .update({ is_default: false })
+      .eq("is_default", true);
+    const { error: setErr } = clearError
+      ? { error: clearError }
+      : await supabase.from("resumes").update({ is_default: true }).eq("id", resume.id);
+
+    setSavingId(null);
+    if (setErr) {
+      setError(setErr.message);
+      return;
+    }
+    setNotice(`${resume.label || resume.file_name} is now your default résumé.`);
+    loadResumes();
   }
 
   // PDF: open in a new tab. Word: convert to a readable preview on this page.
@@ -207,7 +298,7 @@ export default function ResumesPage() {
   }
 
   async function handleDelete(resume: Resume) {
-    if (!window.confirm(`Delete ${resume.file_name}?`)) return;
+    if (!window.confirm(`Delete ${resume.label || resume.file_name}?`)) return;
     setError(null);
     setNotice(null);
 
@@ -218,6 +309,12 @@ export default function ResumesPage() {
     }
 
     await supabase.from("resumes").delete().eq("id", resume.id);
+
+    // If the default was deleted, the newest remaining résumé takes over
+    if (resume.is_default) {
+      const next = resumes.find((r) => r.id !== resume.id);
+      if (next) await supabase.from("resumes").update({ is_default: true }).eq("id", next.id);
+    }
     loadResumes();
   }
 
@@ -237,6 +334,17 @@ export default function ResumesPage() {
     .toUpperCase()
     .replace(",", " ·");
 
+  // Which version has the single highest match score so far
+  let topId: string | null = null;
+  let topScore = -1;
+  for (const r of resumes) {
+    const s = stats[r.id];
+    if (s && s.best > topScore) {
+      topScore = s.best;
+      topId = r.id;
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-paper font-body text-ink lg:flex-row">
       <Nav email={email} active="resumes" />
@@ -247,7 +355,7 @@ export default function ResumesPage() {
           <div className="font-mono text-xs tracking-[0.1em] text-muted">{today}</div>
           <h1 className="font-display text-[44px] font-bold leading-none tracking-[-0.04em]">Résumés</h1>
           <p className="max-w-[620px] pt-1 text-[17px] leading-normal text-ink-2">
-            Upload the résumés you apply with. When AI Match is ready, you’ll pick one to compare with a job posting.
+            Keep a version of your résumé for each kind of role. Name each one, pick a default, and see which version matches jobs best.
           </p>
         </div>
 
@@ -313,15 +421,19 @@ export default function ResumesPage() {
             {/* ---------- List ---------- */}
             <div className="flex flex-col gap-2">
               <div className="px-1 font-mono text-[11px] tracking-[0.08em] text-muted">
-                YOUR RÉSUMÉS · {resumes.length}
+                YOUR VERSIONS · {resumes.length}
               </div>
 
               {resumes.map((r, i) => {
                 const kind = fileKind(r.file_name);
+                const s = stats[r.id];
+                const busy = savingId === r.id;
                 return (
                   <div
                     key={r.id}
-                    className="flex animate-fade-in flex-wrap items-center gap-4 rounded-2xl border-[1.5px] border-paper-2 bg-card px-[18px] py-3.5 transition hover:shadow-[0_10px_24px_-18px_rgba(20,22,27,0.45)]"
+                    className={`flex animate-fade-in flex-wrap items-center gap-4 rounded-2xl border-[1.5px] bg-card px-[18px] py-3.5 transition hover:shadow-[0_10px_24px_-18px_rgba(20,22,27,0.45)] ${
+                      r.is_default ? "border-signal" : "border-paper-2"
+                    }`}
                     style={{ animationDelay: `${i * 0.04}s` }}
                   >
                     <span
@@ -331,13 +443,77 @@ export default function ResumesPage() {
                     >
                       {kind}
                     </span>
+
                     <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="truncate text-[15px] font-semibold">{r.file_name}</span>
-                      <span className="text-[13px] text-muted">
+                      {editingId === r.id ? (
+                        <input
+                          autoFocus
+                          aria-label="Version name"
+                          value={draftLabel}
+                          maxLength={MAX_LABEL}
+                          onChange={(e) => setDraftLabel(e.target.value)}
+                          onBlur={() => saveLabel(r)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveLabel(r);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          placeholder="e.g. Frontend v2"
+                          className="h-9 max-w-[360px] rounded-lg border-[1.5px] border-signal bg-white px-3 text-[15px] font-semibold outline-none ring-4 ring-signal/15"
+                        />
+                      ) : (
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditing(r)}
+                            title="Rename this version"
+                            className="group flex min-w-0 cursor-pointer items-center gap-1.5 text-left"
+                          >
+                            <span className="truncate text-[15px] font-semibold">{r.label || r.file_name}</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-faint transition group-hover:text-signal">
+                              <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />
+                            </svg>
+                          </button>
+                          {r.is_default && (
+                            <span className="rounded-full bg-signal-soft px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-signal-deep">
+                              DEFAULT
+                            </span>
+                          )}
+                          {topId === r.id && resumes.length > 1 && (
+                            <span className="rounded-full bg-green-soft px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-green-ink">
+                              TOP SCORER
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <span className="truncate text-[13px] text-muted">
+                        {r.label ? `${r.file_name} · ` : ""}
                         {formatSize(r.file_size)} · Uploaded {formatDate(r.uploaded_at)}
                       </span>
                     </div>
+
+                    {/* Match history for this version */}
+                    {s ? (
+                      <span
+                        className={`rounded-full px-3 py-1 font-mono text-[12px] font-semibold ${scoreClasses(s.best)}`}
+                        title={`Matched against ${s.count} job${s.count === 1 ? "" : "s"}`}
+                      >
+                        BEST {s.best}% · {s.count} JOB{s.count === 1 ? "" : "S"}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[12px] text-faint">NOT MATCHED YET</span>
+                    )}
+
                     <div className="flex items-center gap-2">
+                      {!r.is_default && (
+                        <button
+                          type="button"
+                          onClick={() => makeDefault(r)}
+                          disabled={busy}
+                          className="min-h-10 cursor-pointer rounded-full px-3 text-sm font-medium text-muted transition hover:bg-paper-2 hover:text-ink disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {busy ? "Saving…" : "Make default"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleOpen(r)}
@@ -349,7 +525,7 @@ export default function ResumesPage() {
                       <button
                         type="button"
                         onClick={() => handleDelete(r)}
-                        aria-label={`Delete ${r.file_name}`}
+                        aria-label={`Delete ${r.label || r.file_name}`}
                         className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-[10px] text-faint transition hover:bg-rust-soft hover:text-rust-ink"
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -371,16 +547,16 @@ export default function ResumesPage() {
 
           {/* ---------- Side card ---------- */}
           <aside className="flex animate-slide-in flex-col gap-4 self-start rounded-3xl bg-ink bg-dots p-7 text-paper xl:sticky xl:top-9 xl:w-[340px] xl:shrink-0">
-            <div className="font-mono text-[11px] tracking-[0.1em] text-signal-glow">NEXT UP · AI MATCH</div>
+            <div className="font-mono text-[11px] tracking-[0.1em] text-signal-glow">RÉSUMÉ VERSIONS</div>
             <div className="font-display text-[26px] font-bold leading-[1.1] tracking-[-0.03em]">
-              Your résumés power the match score.
+              One résumé per kind of role.
             </div>
             <p className="text-[14px] leading-[1.55] text-fog">
-              When AI Match is ready, you’ll choose one of these résumés and a job posting, and JobMatch will show which skills line up and which are missing.
+              Your default version is picked first in AI Match. Run the same job against two versions and the best score tells you which one to send.
             </p>
             <div className="flex flex-col gap-2 pt-1 text-[13px] text-fog">
-              <div className="flex gap-2"><span className="text-mint">✓</span>Keep one résumé per kind of role</div>
-              <div className="flex gap-2"><span className="text-mint">✓</span>Name files clearly, like resume_frontend.pdf</div>
+              <div className="flex gap-2"><span className="text-mint">✓</span>Click a name to rename that version</div>
+              <div className="flex gap-2"><span className="text-mint">✓</span>Use names like “Frontend v2” or “Data analyst”</div>
               <div className="flex gap-2"><span className="text-mint">✓</span>Your files are private to your account</div>
             </div>
           </aside>
@@ -405,7 +581,7 @@ export default function ResumesPage() {
                 DOCX
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-[15px] font-semibold">{preview.resume.file_name}</span>
+                <span className="truncate text-[15px] font-semibold">{preview.resume.label || preview.resume.file_name}</span>
                 <span className="text-xs text-muted">Preview · formatting is simplified</span>
               </div>
               <button
