@@ -64,6 +64,10 @@ export default function TailorCard({ matchId, canRun }: { matchId: string; canRu
         .maybeSingle();
       setReport((data as TailorReport) ?? null);
       setLoading(false);
+      // Opened from the tracker's "Tailor résumé" button: scroll here
+      if (window.location.hash === "#tailor") {
+        setTimeout(() => document.getElementById("tailor")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+      }
     }
     load();
   }, [matchId]);
@@ -89,7 +93,7 @@ export default function TailorCard({ matchId, canRun }: { matchId: string; canRu
   const r = report?.result;
 
   return (
-    <section aria-label="Tailor my résumé" className="flex animate-fade-in flex-col gap-5 rounded-3xl border border-line bg-card p-6 md:p-8">
+    <section id="tailor" aria-label="Tailor my résumé" className="flex scroll-mt-6 animate-fade-in flex-col gap-5 rounded-3xl border border-line bg-card p-6 md:p-8">
       {/* ---------- Header ---------- */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
