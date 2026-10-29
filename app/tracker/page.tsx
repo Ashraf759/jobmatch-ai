@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -11,7 +12,48 @@ type Application = {
   role: string;
   status: string;
   date_applied: string;
+  match_id: string | null;
 };
+
+// An AI Match result that an application can be linked to
+type MatchLite = {
+  id: string;
+  job_title: string;
+  company: string | null;
+  score: number;
+  resume_name: string;
+  created_at: string;
+};
+
+const RING = 326.7;
+
+function scoreStyle(score: number) {
+  if (score >= 85) return { label: "Strong match", bar: "bg-green", text: "text-green-ink", ring: "#7FD1B0" };
+  if (score >= 70) return { label: "Good match", bar: "bg-signal", text: "text-signal-deep", ring: "#7C93FF" };
+  if (score >= 50) return { label: "Partial match", bar: "bg-amber", text: "text-amber-ink", ring: "#F0A93B" };
+  return { label: "Weak match", bar: "bg-rust", text: "text-rust-ink", ring: "#E07A66" };
+}
+
+// "Northwind Labs, Inc." -> "northwindlabsinc"
+const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+const words = (s: string) =>
+  s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 1);
+
+// Find the AI Match result that looks like the same company + role
+function suggestMatch(app: Application, matches: MatchLite[]) {
+  const company = norm(app.company);
+  if (!company) return null;
+  const roleWords = new Set(words(app.role));
+  const candidates = matches.filter((m) => {
+    const mc = norm(m.company);
+    if (!mc || !(mc.includes(company) || company.includes(mc))) return false;
+    return words(m.job_title).some((w) => roleWords.has(w)) || norm(m.job_title) === norm(app.role);
+  });
+  return candidates.sort((a, b) => b.score - a.score)[0] ?? null;
+}
 
 type StatusInfo = { value: string; label: string; dot: string; chip: string; hex: string };
 
@@ -126,6 +168,9 @@ export default function TrackerPage() {
   const [filter, setFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [matches, setMatches] = useState<MatchLite[]>([]);
+  const [linkChoice, setLinkChoice] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -139,6 +184,26 @@ export default function TrackerPage() {
     setLoading(false);
   }
 
+  async function loadMatches() {
+    const { data } = await supabase
+      .from("match_results")
+      .select("id, job_title, company, score, resume_name, created_at")
+      .order("created_at", { ascending: false });
+    setMatches((data ?? []) as MatchLite[]);
+  }
+
+  // Link (or unlink, with null) an application to an AI Match result
+  async function handleLink(id: string, matchId: string | null) {
+    setLinkError(null);
+    const { error } = await supabase.from("applications").update({ match_id: matchId }).eq("id", id);
+    if (error) {
+      setLinkError(error.message);
+      return;
+    }
+    setLinkChoice("");
+    loadApplications();
+  }
+
   useEffect(() => {
     async function checkUserAndLoad() {
       const { data } = await supabase.auth.getUser();
@@ -148,9 +213,16 @@ export default function TrackerPage() {
       }
       setEmail(data.user.email);
       loadApplications();
+      loadMatches();
     }
     checkUserAndLoad();
   }, []);
+
+  // Clear the link picker when you select a different application
+  useEffect(() => {
+    setLinkChoice("");
+    setLinkError(null);
+  }, [selectedId]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -211,6 +283,11 @@ export default function TrackerPage() {
 
   const visible = applications.filter((a) => filter === "all" || a.status === filter);
   const selected = applications.find((a) => a.id === selectedId) ?? applications[0];
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+  const linkedMatch = (app: Application) => (app.match_id ? matchById.get(app.match_id) ?? null : null);
+  const selMatch = selected ? linkedMatch(selected) : null;
+  const selSuggestion = selected && !selMatch ? suggestMatch(selected, matches) : null;
+  const selStyle = selMatch ? scoreStyle(selMatch.score) : null;
   const today = new Date()
     .toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
     .toUpperCase()
@@ -401,10 +478,31 @@ export default function TrackerPage() {
 
                   <span className="text-sm text-ink-2">{formatDate(app.date_applied)}</span>
 
-                  <span className="flex items-center gap-2.5">
-                    <span className="h-1.5 flex-1 rounded-full border border-dashed border-line" />
-                    <span className="w-[34px] font-mono text-xs text-faint">Soon</span>
-                  </span>
+                  {(() => {
+                    const m = linkedMatch(app);
+                    if (!m) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(app.id)}
+                          title="Not linked to an AI Match result yet"
+                          className="flex cursor-pointer items-center gap-2.5"
+                        >
+                          <span className="h-1.5 flex-1 rounded-full border border-dashed border-line" />
+                          <span className="w-[34px] font-mono text-xs text-faint">—</span>
+                        </button>
+                      );
+                    }
+                    const ms = scoreStyle(m.score);
+                    return (
+                      <Link href={`/match/${m.id}`} title={`${ms.label} · open results`} className="flex items-center gap-2.5">
+                        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper-2">
+                          <span className={`block h-1.5 rounded-full ${ms.bar}`} style={{ width: `${m.score}%` }} />
+                        </span>
+                        <span className={`w-[34px] font-mono text-xs font-semibold ${ms.text}`}>{m.score}%</span>
+                      </Link>
+                    );
+                  })()}
 
                   <button
                     type="button"
@@ -451,18 +549,106 @@ export default function TrackerPage() {
                 <div className="text-[13px] text-fog">Applied {formatDate(selected.date_applied)}</div>
               </div>
 
-              <div className="flex items-center gap-5 rounded-[18px] bg-ink-soft p-[18px]">
-                <div className="relative flex h-24 w-24 shrink-0 items-center justify-center">
-                  <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true" className="absolute">
-                    <circle cx="60" cy="60" r="52" fill="none" stroke="#2E323C" strokeWidth="10" />
-                    <circle cx="60" cy="60" r="52" fill="none" stroke="#7C93FF" strokeWidth="2" strokeDasharray="4 8" opacity="0.6" />
-                  </svg>
-                  <span className="font-display text-[26px] font-bold text-mist">—</span>
+              <div className="flex flex-col gap-4 rounded-[18px] bg-ink-soft p-[18px]">
+                <div className="flex items-center gap-5">
+                  <div className="relative flex h-24 w-24 shrink-0 items-center justify-center">
+                    <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true" className="absolute -rotate-90">
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="#2E323C" strokeWidth="10" />
+                      {selMatch && selStyle ? (
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r="52"
+                          fill="none"
+                          stroke={selStyle.ring}
+                          strokeWidth="10"
+                          strokeLinecap="round"
+                          strokeDasharray={RING}
+                          strokeDashoffset={RING * (1 - selMatch.score / 100)}
+                        />
+                      ) : (
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="#7C93FF" strokeWidth="2" strokeDasharray="4 8" opacity="0.6" />
+                      )}
+                    </svg>
+                    <span className={`font-display font-bold ${selMatch ? "text-[26px] text-paper" : "text-[26px] text-mist"}`}>
+                      {selMatch ? `${selMatch.score}%` : "—"}
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="font-semibold">{selStyle ? selStyle.label : "Résumé match"}</div>
+                    <div className="text-[13px] leading-[1.45] text-fog">
+                      {selMatch
+                        ? `Using ${selMatch.resume_name}`
+                        : selSuggestion
+                          ? "We found an AI Match result that looks like this job."
+                          : "Not matched yet. Link a result or run AI Match."}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <div className="font-semibold">Résumé match</div>
-                  <div className="text-[13px] leading-[1.45] text-fog">Scoring arrives with the AI sprint.</div>
-                </div>
+
+                {/* Linked: open results or unlink */}
+                {selMatch && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link href={`/match/${selMatch.id}`} className="text-[13px] font-semibold text-signal-glow hover:underline">
+                      View full results →
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleLink(selected.id, null)}
+                      className="cursor-pointer text-[12px] text-mist hover:text-paper"
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                )}
+
+                {/* Not linked: suggestion, picker, or run a new match */}
+                {!selMatch && (
+                  <div className="flex flex-col gap-2.5">
+                    {selSuggestion && (
+                      <button
+                        type="button"
+                        onClick={() => handleLink(selected.id, selSuggestion.id)}
+                        className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-xl bg-paper px-3.5 text-left text-[13px] font-semibold text-ink transition hover:-translate-y-px"
+                      >
+                        <span className="truncate">
+                          Link “{selSuggestion.job_title}” · {selSuggestion.score}%
+                        </span>
+                        <span aria-hidden="true">+</span>
+                      </button>
+                    )}
+                    {matches.length > 0 && (
+                      <div className="flex gap-2">
+                        <label htmlFor="link-match" className="sr-only">Choose an AI Match result</label>
+                        <select
+                          id="link-match"
+                          value={linkChoice}
+                          onChange={(e) => setLinkChoice(e.target.value)}
+                          className="h-10 min-w-0 flex-1 cursor-pointer rounded-xl border border-ink-border bg-ink px-2.5 text-[13px] text-paper focus:border-signal-glow focus:outline-none"
+                        >
+                          <option value="">{selSuggestion ? "Or pick another result…" : "Pick an AI Match result…"}</option>
+                          {matches.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {`${m.score}% · ${m.job_title}${m.company ? ` · ${m.company}` : ""}`}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!linkChoice}
+                          onClick={() => handleLink(selected.id, linkChoice)}
+                          className="h-10 cursor-pointer rounded-xl border border-ink-border px-3 text-[13px] font-semibold text-paper transition hover:bg-ink-raised disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Link
+                        </button>
+                      </div>
+                    )}
+                    <Link href="/match" className="text-[13px] font-semibold text-signal-glow hover:underline">
+                      Run a new AI Match →
+                    </Link>
+                  </div>
+                )}
+                {linkError && <p role="alert" className="text-[12px] text-rust-soft">{linkError}</p>}
               </div>
 
               <div className="flex flex-col gap-2.5">
@@ -496,13 +682,23 @@ export default function TrackerPage() {
                 >
                   Advance to {statusInfo(nextStatus(selected.status)).label}
                 </button>
-                <button
-                  type="button"
-                  disabled
-                  className="min-h-12 rounded-[14px] border border-ink-border text-[15px] font-medium text-mist"
-                >
-                  Tailor résumé · coming soon
-                </button>
+                {selMatch ? (
+                  <Link
+                    href={`/match/${selMatch.id}#tailor`}
+                    className="flex min-h-12 items-center justify-center rounded-[14px] border border-ink-border text-[15px] font-medium text-paper transition hover:bg-ink-raised"
+                  >
+                    Tailor résumé for this job →
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    title="Link an AI Match result first"
+                    className="min-h-12 rounded-[14px] border border-ink-border text-[15px] font-medium text-mist"
+                  >
+                    Tailor résumé · link a match first
+                  </button>
+                )}
               </div>
             </aside>
           )}

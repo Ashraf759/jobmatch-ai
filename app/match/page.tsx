@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
 
-type ResumeOption = { id: string; file_name: string };
+type ResumeOption = { id: string; file_name: string; label: string | null; is_default: boolean };
 type JobOption = { id: string; title: string; company: string | null };
 type MatchRow = {
   id: string;
@@ -47,7 +47,11 @@ export default function MatchPage() {
 
   async function loadAll() {
     const [r, j, m] = await Promise.all([
-      supabase.from("resumes").select("id, file_name").order("uploaded_at", { ascending: false }),
+      supabase
+        .from("resumes")
+        .select("id, file_name, label, is_default")
+        .order("is_default", { ascending: false }) // default version comes first, so it's picked automatically
+        .order("uploaded_at", { ascending: false }),
       supabase.from("job_postings").select("id, title, company").order("created_at", { ascending: false }),
       supabase
         .from("match_results")
@@ -177,7 +181,9 @@ export default function MatchPage() {
                 <label htmlFor="pick-resume" className="text-[13px] font-semibold">Résumé</label>
                 <select id="pick-resume" value={resumeId} onChange={(e) => setResumeId(e.target.value)} className={selectClass}>
                   {resumes.map((r) => (
-                    <option key={r.id} value={r.id}>{r.file_name}</option>
+                    <option key={r.id} value={r.id}>
+                      {`${r.label ? `${r.label} (${r.file_name})` : r.file_name}${r.is_default ? " · default" : ""}`}
+                    </option>
                   ))}
                 </select>
               </div>
