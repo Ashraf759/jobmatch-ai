@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
+import { STEP_LABEL, runHealth, runPipeline, type Step } from "@/utils/pipeline";
+import { createTailoredCopy, downloadBlob } from "@/utils/autoCopy";
 
 type Resume = {
   id: string;
@@ -14,7 +17,10 @@ type Resume = {
   uploaded_at: string;
   label: string | null;
   is_default: boolean;
+  health_score: number | null;
 };
+
+type JobOption = { id: string; title: string; company: string | null };
 
 type Preview = { resume: Resume; html: string };
 
@@ -71,6 +77,9 @@ export default function ResumesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobOption[]>([]);
+  const [targetJob, setTargetJob] = useState("");
+  const [step, setStep] = useState<Step | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -83,6 +92,12 @@ export default function ResumesPage() {
       .order("uploaded_at", { ascending: false });
 
     if (!error && data) setResumes(data);
+
+    const { data: jobRows } = await supabase
+      .from("job_postings")
+      .select("id, title, company")
+      .order("created_at", { ascending: false });
+    setJobs((jobRows ?? []) as JobOption[]);
 
     // Count matches and find the best score for each résumé version
     const { data: matches } = await supabase.from("match_results").select("resume_id, score");
@@ -157,25 +172,56 @@ export default function ResumesPage() {
     }
 
     // The very first résumé becomes the default automatically
-    const { error: insertError } = await supabase.from("resumes").insert({
-      file_name: file.name,
-      file_path: path,
-      file_size: file.size,
-      label: labelFromFileName(file.name) || null,
-      is_default: resumes.length === 0,
-    });
+    const { data: inserted, error: insertError } = await supabase
+      .from("resumes")
+      .insert({
+        file_name: file.name,
+        file_path: path,
+        file_size: file.size,
+        label: labelFromFileName(file.name) || null,
+        is_default: resumes.length === 0,
+      })
+      .select("id")
+      .single();
 
-    if (insertError) {
+    if (insertError || !inserted) {
       // Clean up the file so we don't leave an orphan behind
       await supabase.storage.from("resumes").remove([path]);
       setUploading(false);
-      setError(insertError.message);
+      setError(insertError?.message ?? "Couldn't save the résumé.");
       return;
     }
 
+    // Automatic step 1: free Health Report
+    setStep("health");
+    try {
+      await runHealth(inserted.id);
+    } catch {
+      // the Studio page can re-run it
+    }
+
+    // Automatic step 2 (optional): match + ATS check + tailoring for the chosen job
+    if (targetJob) {
+      try {
+        const { matchId } = await runPipeline(inserted.id, targetJob, setStep);
+        // Automatic step 3: build the tailored résumé, save it as a new version and download it
+        setStep("copy");
+        try {
+          const copy = await createTailoredCopy(supabase, inserted.id, matchId);
+          downloadBlob(copy.blob, copy.fileName);
+          router.push(`/tailor/${copy.reportId}?saved=${copy.newResumeId}`);
+        } catch {
+          router.push(`/match/${matchId}#tailor`);
+        }
+        return;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Auto-tailoring failed. You can run it from the résumé page.");
+      }
+    }
+
+    setStep(null);
     setUploading(false);
-    setNotice(`Uploaded ${file.name}. Give it a clear version name so you can tell it apart.`);
-    loadResumes();
+    router.push(`/resumes/${inserted.id}`);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -385,7 +431,7 @@ export default function ResumesPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <div className="font-display text-2xl font-bold tracking-[-0.02em]">
-                  {uploading ? "Uploading…" : dragging ? "Drop it here" : "Drag a résumé here"}
+                  {uploading ? (step ? STEP_LABEL[step] : "Uploading…") : dragging ? "Drop it here" : "Drag a résumé here"}
                 </div>
                 <div className="text-sm text-muted">PDF or Word (.docx), up to 5 MB</div>
               </div>
@@ -405,6 +451,30 @@ export default function ResumesPage() {
               >
                 Browse files
               </button>
+              {jobs.length > 0 && (
+                <div className="flex flex-col items-center gap-1.5 pt-1">
+                  <label htmlFor="target-job" className="text-[13px] font-semibold">
+                    Auto-tailor for a job <span className="font-normal text-muted">(optional)</span>
+                  </label>
+                  <select
+                    id="target-job"
+                    value={targetJob}
+                    onChange={(e) => setTargetJob(e.target.value)}
+                    disabled={uploading}
+                    className="h-10 max-w-[360px] cursor-pointer rounded-xl border-[1.5px] border-line bg-white px-3 text-[14px]"
+                  >
+                    <option value="">Just analyze my résumé</option>
+                    {jobs.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.company ? `${j.title} · ${j.company}` : j.title}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="max-w-[420px] text-[12px] text-muted">
+                    Every upload gets a free Health Report. Pick a job and we also run the match and the ATS check, then hand you a tailored copy of your résumé as a Word file.
+                  </span>
+                </div>
+              )}
             </div>
 
             {error && (
@@ -491,6 +561,23 @@ export default function ResumesPage() {
                       </span>
                     </div>
 
+                    {/* Free health score */}
+                    <Link
+                      href={`/resumes/${r.id}`}
+                      title="Open Résumé Studio"
+                      className={`rounded-full px-3 py-1 font-mono text-[12px] font-semibold ${
+                        r.health_score === null
+                          ? "bg-paper-2 text-muted"
+                          : r.health_score >= 80
+                            ? "bg-green-soft text-green-ink"
+                            : r.health_score >= 55
+                              ? "bg-amber-soft text-amber-ink"
+                              : "bg-rust-soft text-rust-ink"
+                      }`}
+                    >
+                      HEALTH {r.health_score ?? "—"}
+                    </Link>
+
                     {/* Match history for this version */}
                     {s ? (
                       <span
@@ -514,6 +601,12 @@ export default function ResumesPage() {
                           {busy ? "Saving…" : "Make default"}
                         </button>
                       )}
+                      <Link
+                        href={`/resumes/${r.id}`}
+                        className="flex min-h-10 items-center rounded-full bg-ink px-4 text-sm font-semibold text-paper transition hover:-translate-y-px"
+                      >
+                        Open
+                      </Link>
                       <button
                         type="button"
                         onClick={() => handleOpen(r)}

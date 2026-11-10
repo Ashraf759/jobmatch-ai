@@ -59,6 +59,10 @@ export default function AtsCard({ matchId, canRun }: { matchId: string; canRun: 
         .maybeSingle();
       setReport((data as AtsReport) ?? null);
       setLoading(false);
+      // Opened from the ATS Scanner: scroll here
+      if (window.location.hash === "#ats") {
+        setTimeout(() => document.getElementById("ats")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+      }
     }
     load();
   }, [matchId]);
@@ -95,7 +99,7 @@ export default function AtsCard({ matchId, canRun }: { matchId: string; canRun: 
   const missing = keywords.filter((k) => !k.found);
 
   return (
-    <section aria-label="ATS check" className="flex animate-fade-in flex-col gap-5 rounded-3xl border border-line bg-card p-6 md:p-8">
+    <section id="ats" aria-label="ATS check" className="flex scroll-mt-6 animate-fade-in flex-col gap-5 rounded-3xl border border-line bg-card p-6 md:p-8">
       {/* ---------- Header ---------- */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">

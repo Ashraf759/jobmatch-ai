@@ -13,7 +13,25 @@ type Application = {
   status: string;
   date_applied: string;
   match_id: string | null;
+  follow_up_date: string | null;
+  notes: string | null;
 };
+
+// Follow-up reminders (SCRUM-36)
+function isoDay(offsetDays = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function followUpChip(date: string | null, status: string) {
+  if (!date || status === "offer" || status === "rejected") return null;
+  const today = isoDay();
+  if (date < today) return { text: "Follow-up overdue", cls: "bg-rust-soft text-rust-ink" };
+  if (date === today) return { text: "Follow up today", cls: "bg-amber-soft text-amber-ink" };
+  const label = new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return { text: `Follow up ${label}`, cls: "bg-signal-soft text-signal-deep" };
+}
 
 // An AI Match result that an application can be linked to
 type MatchLite = {
@@ -171,6 +189,7 @@ export default function TrackerPage() {
   const [matches, setMatches] = useState<MatchLite[]>([]);
   const [linkChoice, setLinkChoice] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
   const router = useRouter();
   const supabase = createClient();
 
@@ -214,9 +233,28 @@ export default function TrackerPage() {
       setEmail(data.user.email);
       loadApplications();
       loadMatches();
+      // Opened from a reminder link: select that application
+      const fromLink = new URLSearchParams(window.location.search).get("app");
+      if (fromLink) setSelectedId(fromLink);
     }
     checkUserAndLoad();
   }, []);
+
+  // Keep the notes box in sync with the selected application
+  useEffect(() => {
+    const app = applications.find((a) => a.id === selectedId) ?? applications[0];
+    setNotesDraft(app?.notes ?? "");
+  }, [selectedId, applications]);
+
+  async function setFollowUp(id: string, date: string | null) {
+    await supabase.from("applications").update({ follow_up_date: date }).eq("id", id);
+    loadApplications();
+  }
+
+  async function saveNotes(id: string) {
+    await supabase.from("applications").update({ notes: notesDraft.slice(0, 2000) }).eq("id", id);
+    loadApplications();
+  }
 
   // Clear the link picker when you select a different application
   useEffect(() => {
@@ -250,7 +288,10 @@ export default function TrackerPage() {
   }
 
   async function handleStatusChange(id: string, status: string) {
-    await supabase.from("applications").update({ status }).eq("id", id);
+    const app = applications.find((a) => a.id === id);
+    // Moving to Applied with no reminder set: remind to follow up in a week
+    const extra = status === "applied" && app && !app.follow_up_date ? { follow_up_date: isoDay(7) } : {};
+    await supabase.from("applications").update({ status, ...extra }).eq("id", id);
     loadApplications();
   }
 
@@ -476,7 +517,13 @@ export default function TrackerPage() {
                     {s.label}
                   </button>
 
-                  <span className="text-sm text-ink-2">{formatDate(app.date_applied)}</span>
+                  <span className="flex flex-col items-start gap-1 text-sm text-ink-2">
+                    {formatDate(app.date_applied)}
+                    {(() => {
+                      const chip = followUpChip(app.follow_up_date, app.status);
+                      return chip ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${chip.cls}`}>{chip.text}</span> : null;
+                    })()}
+                  </span>
 
                   {(() => {
                     const m = linkedMatch(app);
@@ -672,6 +719,51 @@ export default function TrackerPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* ---------- Follow-up reminder + notes (SCRUM-36) ---------- */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="follow-up" className="text-[13px] font-semibold">Follow-up reminder</label>
+                  {selected.follow_up_date && (
+                    <button type="button" onClick={() => setFollowUp(selected.id, null)} className="cursor-pointer text-[12px] text-mist hover:text-paper">
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="follow-up"
+                  type="date"
+                  value={selected.follow_up_date ?? ""}
+                  onChange={(e) => setFollowUp(selected.id, e.target.value || null)}
+                  className="h-10 rounded-xl border border-ink-border bg-ink px-3 text-[14px] text-paper [color-scheme:dark] focus:border-signal-glow focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  {[
+                    { label: "Tomorrow", days: 1 },
+                    { label: "In 3 days", days: 3 },
+                    { label: "In a week", days: 7 },
+                  ].map((q) => (
+                    <button
+                      key={q.days}
+                      type="button"
+                      onClick={() => setFollowUp(selected.id, isoDay(q.days))}
+                      className="min-h-8 flex-1 cursor-pointer rounded-lg border border-ink-border text-[12px] text-fog transition hover:bg-ink-raised hover:text-white"
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+                <label htmlFor="app-notes" className="pt-1 text-[13px] font-semibold">Notes</label>
+                <textarea
+                  id="app-notes"
+                  value={notesDraft}
+                  onChange={(e) => setNotesDraft(e.target.value)}
+                  onBlur={() => saveNotes(selected.id)}
+                  rows={3}
+                  placeholder="Recruiter name, interview date, what to prepare…"
+                  className="resize-y rounded-xl border border-ink-border bg-ink px-3 py-2 text-[13px] text-paper placeholder:text-mist focus:border-signal-glow focus:outline-none"
+                />
               </div>
 
               <div className="mt-2 flex flex-col gap-2.5">
