@@ -13,10 +13,12 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "cheerio": "^1.2.0",
+    "docx": "^9.15.3",
     "mammoth": "^1.13.0",
     "next": "16.3.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "unpdf": "^2.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
