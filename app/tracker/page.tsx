@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
+import { runPipeline, STEP_LABEL, type Step } from "@/utils/pipeline";
+import { refreshNotices, toast } from "@/utils/notifications";
 
 type Application = {
   id: string;
@@ -15,7 +17,11 @@ type Application = {
   match_id: string | null;
   follow_up_date: string | null;
   notes: string | null;
+  job_posting_id: string | null;
 };
+
+const inputClass =
+  "h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] transition placeholder:text-faint focus:border-signal focus:shadow-[0_0_0_4px_rgba(42,69,214,0.15)] focus:outline-none";
 
 // Follow-up reminders (SCRUM-36)
 function isoDay(offsetDays = 0) {
@@ -24,10 +30,22 @@ function isoDay(offsetDays = 0) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Colored left edge for rows that need action today or are overdue
+function urgency(app: { follow_up_date: string | null; status: string }) {
+  if (!app.follow_up_date || app.status === "offer" || app.status === "rejected") return "";
+  const today = isoDay();
+  if (app.follow_up_date < today) return "border-l-[6px] border-l-rust";
+  if (app.follow_up_date === today) return "border-l-[6px] border-l-amber";
+  return "";
+}
+
 function followUpChip(date: string | null, status: string) {
   if (!date || status === "offer" || status === "rejected") return null;
   const today = isoDay();
-  if (date < today) return { text: "Follow-up overdue", cls: "bg-rust-soft text-rust-ink" };
+  if (date < today) {
+    const days = Math.round((new Date(`${today}T00:00:00`).getTime() - new Date(`${date}T00:00:00`).getTime()) / 864e5);
+    return { text: `Overdue ${days} day${days === 1 ? "" : "s"}`, cls: "bg-rust-soft text-rust-ink" };
+  }
   if (date === today) return { text: "Follow up today", cls: "bg-amber-soft text-amber-ink" };
   const label = new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return { text: `Follow up ${label}`, cls: "bg-signal-soft text-signal-deep" };
@@ -180,6 +198,16 @@ export default function TrackerPage() {
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("saved");
+  const [jobUrl, setJobUrl] = useState("");
+  const [jobText, setJobText] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const [fetchNote, setFetchNote] = useState<string | null>(null);
+  const [fetchOk, setFetchOk] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [analyzeStep, setAnalyzeStep] = useState<Step | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [detailsText, setDetailsText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | undefined>();
   // Display-only state for the new design
@@ -238,6 +266,10 @@ export default function TrackerPage() {
       if (fromLink) setSelectedId(fromLink);
     }
     checkUserAndLoad();
+    // Reload when a notification is marked Done or snoozed
+    const onRefresh = () => loadApplications();
+    window.addEventListener("jm:refresh", onRefresh);
+    return () => window.removeEventListener("jm:refresh", onRefresh);
   }, []);
 
   // Keep the notes box in sync with the selected application
@@ -248,7 +280,55 @@ export default function TrackerPage() {
 
   async function setFollowUp(id: string, date: string | null) {
     await supabase.from("applications").update({ follow_up_date: date }).eq("id", id);
-    loadApplications();
+    await loadApplications();
+    refreshNotices();
+    if (date) toast(`Reminder set for ${new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
+  }
+
+  // Read the job from a link with our existing job reader
+  async function fetchJob() {
+    if (!jobUrl.trim()) return;
+    setFetching(true);
+    setFetchNote(null);
+    try {
+      const res = await fetch("/api/parse-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: jobUrl.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "We couldn't read that link. Paste the job description instead.");
+      if (json.title) setRole(String(json.title).slice(0, 200));
+      if (json.company) setCompany(String(json.company).slice(0, 200));
+      if (json.description) setJobText(String(json.description));
+      if (json.source_url) setJobUrl(String(json.source_url));
+      setFetchOk(!json.warning);
+      setFetchNote(
+        json.warning ??
+          `Filled in: ${json.title || "role"}${json.company ? ` at ${json.company}` : ""} (${String(json.description ?? "").split(/\s+/).length} words). Check it, then save.`,
+      );
+    } catch (e) {
+      setFetchOk(false);
+      setFetchNote(e instanceof Error ? e.message : "We couldn't read that link.");
+    }
+    setFetching(false);
+  }
+
+  // Save a job posting and return its id (or null if there is nothing to save)
+  async function saveJobPosting(userId: string, title: string, comp: string, description: string, url: string) {
+    if (!description.trim() && !url.trim()) return { id: null as string | null, error: null as string | null };
+    const { data, error } = await supabase
+      .from("job_postings")
+      .insert({
+        user_id: userId,
+        title: title || "Untitled role",
+        company: comp || null,
+        description: (description || `Job posting: ${url}`).slice(0, 50_000),
+        source_url: url || null,
+      })
+      .select("id")
+      .single();
+    return { id: (data?.id as string) ?? null, error: error?.message ?? null };
   }
 
   async function saveNotes(id: string) {
@@ -262,19 +342,106 @@ export default function TrackerPage() {
     setLinkError(null);
   }, [selectedId]);
 
+  // Open the same form, filled in with this application's details
+  async function startEdit(app: Application) {
+    setEditingId(app.id);
+    setCompany(app.company);
+    setRole(app.role);
+    setStatus(app.status);
+    setJobUrl("");
+    setJobText("");
+    setFetchNote(null);
+    setAddError(null);
+    if (app.job_posting_id) {
+      const { data } = await supabase.from("job_postings").select("description, source_url").eq("id", app.job_posting_id).maybeSingle();
+      setJobUrl(data?.source_url ?? "");
+      setJobText(data?.description ?? "");
+    }
+    setShowAdd(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeForm() {
+    setEditingId(null);
+    setCompany("");
+    setRole("");
+    setStatus("saved");
+    setJobUrl("");
+    setJobText("");
+    setFetchNote(null);
+    setAddError(null);
+    setShowAdd(false);
+  }
+
+  // Save changes to an existing application (and its job details)
+  async function saveEdit() {
+    const app = applications.find((a) => a.id === editingId);
+    if (!app) return;
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+    let jobId = app.job_posting_id;
+    if (jobId) {
+      if (jobText.trim() || jobUrl.trim()) {
+        await supabase
+          .from("job_postings")
+          .update({
+            title: role || "Untitled role",
+            company: company || null,
+            description: (jobText || `Job posting: ${jobUrl}`).slice(0, 50_000),
+            source_url: jobUrl.trim() || null,
+          })
+          .eq("id", jobId);
+      }
+    } else {
+      const job = await saveJobPosting(data.user.id, role, company, jobText, jobUrl.trim());
+      jobId = job.id;
+    }
+    const { error } = await supabase
+      .from("applications")
+      .update({ company, role, status, job_posting_id: jobId })
+      .eq("id", app.id);
+    setSaving(false);
+    if (error) {
+      setAddError(error.message);
+      return;
+    }
+    closeForm();
+    await loadApplications();
+    refreshNotices();
+    toast("Changes saved");
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    if (editingId) {
+      setAddError(null);
+      setSaving(true);
+      await saveEdit();
+      return;
+    }
     setAddError(null);
+    setSaving(true);
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
 
-    const { error } = await supabase.from("applications").insert({
-      company,
-      role,
-      status,
-      user_id: data.user.id,
-    });
+    // 1. Save the job posting (if a link or description was given)
+    const job = await saveJobPosting(data.user.id, role, company, jobText, jobUrl.trim());
 
+    // 2. Save the application, linked to that job
+    const { data: inserted, error } = await supabase
+      .from("applications")
+      .insert({
+        company,
+        role,
+        status,
+        user_id: data.user.id,
+        job_posting_id: job.id,
+        follow_up_date: status === "applied" ? isoDay(7) : null,
+      })
+      .select("id")
+      .single();
+
+    setSaving(false);
     if (error) {
       setAddError(error.message);
       return;
@@ -283,8 +450,58 @@ export default function TrackerPage() {
     setCompany("");
     setRole("");
     setStatus("saved");
+    setJobUrl("");
+    setJobText("");
+    setFetchNote(null);
     setShowAdd(false);
+    if (inserted?.id) setSelectedId(inserted.id);
+    await loadApplications();
+    refreshNotices();
+    toast(job.error ? `Application saved. Job details weren't saved: ${job.error}` : `Saved ${role} at ${company}`);
+  }
+
+  // Add a link or description to an application that doesn't have one yet
+  async function addJobDetails(app: Application) {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+    const text = detailsText.trim();
+    const isUrl = /^https?:\/\//i.test(text);
+    const job = await saveJobPosting(data.user.id, app.role, app.company, isUrl ? "" : text, isUrl ? text : "");
+    if (job.error || !job.id) {
+      setAnalyzeError(job.error ?? "Add a job description or link first.");
+      return;
+    }
+    await supabase.from("applications").update({ job_posting_id: job.id }).eq("id", app.id);
+    setDetailsText("");
     loadApplications();
+    toast("Job details saved");
+  }
+
+  // One click: analyze this job with the default résumé, then link the result
+  async function analyzeApp(app: Application) {
+    if (!app.job_posting_id) return;
+    setAnalyzeError(null);
+    const { data: r } = await supabase
+      .from("resumes")
+      .select("id")
+      .order("is_default", { ascending: false })
+      .order("uploaded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!r) {
+      setAnalyzeError("Upload a résumé first, on the Résumés page.");
+      return;
+    }
+    try {
+      const { matchId } = await runPipeline(r.id, app.job_posting_id, setAnalyzeStep);
+      await supabase.from("applications").update({ match_id: matchId }).eq("id", app.id);
+      const { data: m } = await supabase.from("match_results").select("score").eq("id", matchId).maybeSingle();
+      await Promise.all([loadApplications(), loadMatches()]);
+      toast(`Analysis ready: ${m?.score ?? "?"}% match for ${app.role}`, `/match/${matchId}`);
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : "The analysis failed. Please try again.");
+    }
+    setAnalyzeStep(null);
   }
 
   async function handleStatusChange(id: string, status: string) {
@@ -292,12 +509,14 @@ export default function TrackerPage() {
     // Moving to Applied with no reminder set: remind to follow up in a week
     const extra = status === "applied" && app && !app.follow_up_date ? { follow_up_date: isoDay(7) } : {};
     await supabase.from("applications").update({ status, ...extra }).eq("id", id);
-    loadApplications();
+    await loadApplications();
+    refreshNotices();
   }
 
   async function handleDelete(id: string) {
     await supabase.from("applications").delete().eq("id", id);
-    loadApplications();
+    await loadApplications();
+    refreshNotices();
   }
 
   if (loading) {
@@ -349,7 +568,7 @@ export default function TrackerPage() {
           </div>
           <button
             type="button"
-            onClick={() => setShowAdd(!showAdd)}
+            onClick={() => (showAdd ? closeForm() : setShowAdd(true))}
             className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-signal px-[22px] py-3.5 text-[15px] font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_10px_24px_-12px_rgba(42,69,214,0.8)]"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
@@ -359,54 +578,86 @@ export default function TrackerPage() {
           </button>
         </div>
 
-        {/* ---------- Add form ---------- */}
+        {/* ---------- Add form: job link or description + application ---------- */}
         {showAdd && (
-          <form
-            onSubmit={handleAdd}
-            className="flex animate-fade-in flex-col gap-3.5 rounded-[18px] border-[1.5px] border-signal bg-card p-5 md:flex-row md:items-end"
-          >
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label htmlFor="company" className="text-[13px] font-semibold">Company</label>
-              <input
-                id="company"
-                placeholder="e.g. Northwind Labs"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                required
-                autoFocus
-                className="h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] transition placeholder:text-faint focus:border-signal focus:shadow-[0_0_0_4px_rgba(42,69,214,0.15)] focus:outline-none"
-              />
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label htmlFor="role" className="text-[13px] font-semibold">Role</label>
-              <input
-                id="role"
-                placeholder="e.g. Frontend Engineer"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                required
-                className="h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] transition placeholder:text-faint focus:border-signal focus:shadow-[0_0_0_4px_rgba(42,69,214,0.15)] focus:outline-none"
-              />
-            </div>
+          <form onSubmit={handleAdd} className="flex animate-fade-in flex-col gap-4 rounded-[18px] border-[1.5px] border-signal bg-card p-5">
+            {editingId && (
+              <div className="font-mono text-[11px] tracking-[0.1em] text-signal">EDITING APPLICATION</div>
+            )}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="application-status" className="text-[13px] font-semibold">Status</label>
-              <select
-                id="application-status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="h-[46px] rounded-xl border-[1.5px] border-line bg-white px-3.5 text-[15px] focus:border-signal focus:outline-none"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              <label htmlFor="job-url" className="text-[13px] font-semibold">
+                Job link <span className="font-normal text-muted">(optional, fills in the details for you)</span>
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="job-url"
+                  type="url"
+                  placeholder="https://careers.company.com/jobs/123"
+                  value={jobUrl}
+                  onChange={(e) => setJobUrl(e.target.value)}
+                  autoFocus
+                  className={`${inputClass} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={fetchJob}
+                  disabled={!jobUrl.trim() || fetching}
+                  className="h-[46px] cursor-pointer rounded-xl border-[1.5px] border-ink px-5 text-[14px] font-semibold transition hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {fetching ? "Reading…" : "Fetch details"}
+                </button>
+              </div>
+              {fetchNote && (
+                <p className={`rounded-lg px-3 py-2 text-[13px] ${fetchOk ? "bg-green-soft text-green-ink" : "bg-amber-soft text-amber-ink"}`}>
+                  {fetchOk ? "✓ " : ""}
+                  {fetchNote}
+                </p>
+              )}
             </div>
-            <button
-              type="submit"
-              className="h-[46px] cursor-pointer rounded-xl bg-ink px-[22px] text-[15px] font-semibold text-paper transition hover:-translate-y-px"
-            >
-              Save role
-            </button>
+
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1fr_1fr_180px]">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="company" className="text-[13px] font-semibold">Company</label>
+                <input id="company" placeholder="e.g. Northwind Labs" value={company} onChange={(e) => setCompany(e.target.value)} required className={inputClass} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="role" className="text-[13px] font-semibold">Role</label>
+                <input id="role" placeholder="e.g. Frontend Engineer" value={role} onChange={(e) => setRole(e.target.value)} required className={inputClass} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="application-status" className="text-[13px] font-semibold">Status</label>
+                <select id="application-status" value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
+                  {STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="job-text" className="text-[13px] font-semibold">
+                Job description <span className="font-normal text-muted">(needed to analyze it; filled in by Fetch, or paste it)</span>
+              </label>
+              <textarea
+                id="job-text"
+                value={jobText}
+                onChange={(e) => setJobText(e.target.value)}
+                rows={5}
+                placeholder="Paste the job description here"
+                className="resize-y rounded-xl border-[1.5px] border-line bg-white px-3.5 py-3 text-[14px] leading-[1.55] placeholder:text-faint focus:border-signal focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[12px] text-muted">Saving as Applied sets a follow-up reminder for one week from today.</span>
+              <button
+                type="submit"
+                disabled={saving}
+                className="h-[46px] cursor-pointer rounded-xl bg-ink px-[22px] text-[15px] font-semibold text-paper transition hover:-translate-y-px disabled:opacity-60"
+              >
+                {saving ? "Saving…" : editingId ? "Save changes" : "Save application"}
+              </button>
+            </div>
           </form>
         )}
         {showAdd && addError && (
@@ -489,7 +740,7 @@ export default function TrackerPage() {
                   key={app.id}
                   className={`grid animate-fade-in grid-cols-1 items-center gap-4 rounded-2xl border-[1.5px] px-[18px] py-3.5 transition hover:shadow-[0_10px_24px_-18px_rgba(20,22,27,0.45)] ${ROW_GRID} ${
                     isSel ? "border-signal bg-white" : "border-paper-2 bg-card"
-                  }`}
+                  } ${urgency(app)}`}
                   style={{ animationDelay: `${i * 0.04}s` }}
                 >
                   <button
@@ -591,7 +842,19 @@ export default function TrackerPage() {
               className="flex animate-slide-in flex-col gap-5 self-start rounded-3xl bg-ink bg-dots p-7 text-paper xl:sticky xl:top-9 xl:w-[340px] xl:shrink-0"
             >
               <div className="flex flex-col gap-1.5">
-                <div className="font-mono text-[11px] tracking-[0.1em] text-mist">{selected.company.toUpperCase()}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono text-[11px] tracking-[0.1em] text-mist">{selected.company.toUpperCase()}</div>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(selected)}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-ink-border px-3 py-1 text-[12px] font-semibold text-paper transition hover:bg-ink-raised"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" />
+                    </svg>
+                    Edit
+                  </button>
+                </div>
                 <div className="font-display text-[28px] font-bold leading-[1.1] tracking-[-0.03em]">{selected.role}</div>
                 <div className="text-[13px] text-fog">Applied {formatDate(selected.date_applied)}</div>
               </div>
@@ -690,9 +953,40 @@ export default function TrackerPage() {
                         </button>
                       </div>
                     )}
-                    <Link href="/match" className="text-[13px] font-semibold text-signal-glow hover:underline">
-                      Run a new AI Match →
-                    </Link>
+                    {selected.job_posting_id ? (
+                      <button
+                        type="button"
+                        onClick={() => analyzeApp(selected)}
+                        disabled={!!analyzeStep}
+                        className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-signal px-4 text-[14px] font-semibold text-white transition hover:-translate-y-px disabled:cursor-wait disabled:opacity-80"
+                      >
+                        {analyzeStep && <span className="h-2 w-2 animate-pulse-ring rounded-full bg-white" />}
+                        {analyzeStep ? STEP_LABEL[analyzeStep] : "Analyze this job"}
+                      </button>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="job-details" className="text-[12px] text-fog">
+                          Add the job link or description to analyze it
+                        </label>
+                        <textarea
+                          id="job-details"
+                          value={detailsText}
+                          onChange={(e) => setDetailsText(e.target.value)}
+                          rows={3}
+                          placeholder="Paste a link or the job description"
+                          className="resize-y rounded-xl border border-ink-border bg-ink px-3 py-2 text-[13px] text-paper placeholder:text-mist focus:border-signal-glow focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addJobDetails(selected)}
+                          disabled={!detailsText.trim()}
+                          className="h-10 cursor-pointer rounded-xl border border-ink-border text-[13px] font-semibold text-paper hover:bg-ink-raised disabled:opacity-50"
+                        >
+                          Save job details
+                        </button>
+                      </div>
+                    )}
+                    {analyzeError && <p role="alert" className="text-[12px] text-rust-soft">{analyzeError}</p>}
                   </div>
                 )}
                 {linkError && <p role="alert" className="text-[12px] text-rust-soft">{linkError}</p>}

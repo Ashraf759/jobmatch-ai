@@ -161,12 +161,12 @@ export default function MatchPage() {
                 <span aria-hidden="true">→</span>
               </Link>
               <Link
-                href="/jobs"
+                href="/tracker"
                 className={`flex flex-1 items-center justify-between rounded-2xl border-[1.5px] px-5 py-4 text-[15px] font-semibold transition hover:border-ink ${
                   jobs.length > 0 ? "border-green bg-green-soft text-green-ink" : "border-line text-ink"
                 }`}
               >
-                {jobs.length > 0 ? "✓ Job posting saved" : "Save a job posting"}
+                {jobs.length > 0 ? "✓ Job saved" : "Add a job in Applications"}
                 <span aria-hidden="true">→</span>
               </Link>
             </div>

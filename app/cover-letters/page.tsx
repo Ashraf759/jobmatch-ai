@@ -178,7 +178,7 @@ export default function CoverLettersPage() {
 
         <Card title="WRITE A NEW LETTER">
           {resumes.length === 0 || jobs.length === 0 ? (
-            <EmptyState text="You need a résumé and a saved job first." href={resumes.length ? "/jobs" : "/resumes"} cta={resumes.length ? "Add a job" : "Upload a résumé"} />
+            <EmptyState text="You need a résumé and a saved job first." href={resumes.length ? "/tracker" : "/resumes"} cta={resumes.length ? "Add an application" : "Upload a résumé"} />
           ) : (
             <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_150px_170px_auto]">
               <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
