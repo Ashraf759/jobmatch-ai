@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import { NotificationBell, ToastHost } from "@/components/Notifications";
 
 type Active =
   | "dashboard"
@@ -42,7 +42,6 @@ const GROUPS: { title: string; items: { key: Active; href: string; label: string
     items: [
       { key: "dashboard", href: "/dashboard", label: "Dashboard", short: "Dashboard" },
       { key: "tracker", href: "/tracker", label: "Applications", short: "Applications" },
-      { key: "jobs", href: "/jobs", label: "Job postings", short: "Jobs" },
     ],
   },
   {
@@ -71,78 +70,6 @@ function LogoMark({ size = 30 }: { size?: number }) {
   );
 }
 
-type Due = { id: string; company: string; role: string; follow_up_date: string };
-
-// Notification bell (SCRUM-36): follow-ups that are due today or overdue
-function Bell() {
-  const [items, setItems] = useState<Due[]>([]);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function load() {
-      const d = new Date();
-      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const { data } = await supabase
-        .from("applications")
-        .select("id, company, role, follow_up_date, status")
-        .not("follow_up_date", "is", null)
-        .lte("follow_up_date", today)
-        .in("status", ["saved", "applied", "interview"])
-        .order("follow_up_date", { ascending: true });
-      setItems((data ?? []) as Due[]);
-    }
-    load();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-label={`Notifications: ${items.length} follow-ups due`}
-        className="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] text-fog transition hover:bg-ink-soft hover:text-white"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-        </svg>
-        {items.length > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rust px-1 font-mono text-[10px] font-bold text-white">
-            {items.length}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-11 z-50 flex w-[290px] flex-col gap-1 rounded-2xl border border-line bg-card p-3 text-ink shadow-[0_24px_50px_-24px_rgba(0,0,0,0.5)] lg:left-0 lg:right-auto">
-          <div className="px-2 pb-1 font-mono text-[11px] tracking-[0.1em] text-muted">FOLLOW-UPS DUE</div>
-          {items.length === 0 && <p className="px-2 py-2 text-[13px] text-muted">You’re all caught up.</p>}
-          {items.slice(0, 6).map((a) => (
-            <Link key={a.id} href={`/tracker?app=${a.id}`} onClick={() => setOpen(false)} className="flex flex-col rounded-xl px-2 py-2 hover:bg-paper">
-              <span className="truncate text-[14px] font-semibold">Follow up: {a.role}</span>
-              <span className="truncate text-[12px] text-muted">
-                {a.company} · due {new Date(`${a.follow_up_date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              </span>
-            </Link>
-          ))}
-          <Link href="/dashboard" onClick={() => setOpen(false)} className="px-2 pt-1 text-[13px] font-semibold text-signal">
-            See all on the dashboard →
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Nav({ email, active }: { email?: string; active?: Active }) {
   const router = useRouter();
   const supabase = createClient();
@@ -152,6 +79,8 @@ export default function Nav({ email, active }: { email?: string; active?: Active
     router.push("/login");
   }
 
+  // The old Job postings page now belongs to Applications
+  if (active === "jobs") active = "tracker";
   const name = email ? email.split("@")[0] : "Signed in";
   const initial = (email?.[0] ?? "?").toUpperCase();
 
@@ -163,13 +92,13 @@ export default function Nav({ email, active }: { email?: string; active?: Active
   return (
     <>
       {/* ---------- Desktop sidebar ---------- */}
-      <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col gap-6 bg-ink px-5 py-7 text-paper lg:flex">
+      <aside className="sticky top-0 z-40 hidden h-screen w-[248px] shrink-0 flex-col gap-6 bg-ink px-5 py-7 text-paper lg:flex">
         <div className="flex items-center justify-between gap-2">
           <Link href="/dashboard" className="flex items-center gap-2.5 px-2 text-paper">
             <LogoMark />
             <span className="font-display text-xl font-bold tracking-[-0.02em]">JobMatch</span>
           </Link>
-          <Bell />
+          <NotificationBell />
         </div>
 
         <nav aria-label="App" className="flex flex-col gap-4 text-[15px]">
@@ -205,14 +134,14 @@ export default function Nav({ email, active }: { email?: string; active?: Active
       </aside>
 
       {/* ---------- Mobile top bar ---------- */}
-      <div className="flex flex-col gap-3 bg-ink px-5 py-4 text-paper lg:hidden">
+      <div className="relative z-40 flex flex-col gap-3 bg-ink px-5 py-4 text-paper lg:hidden">
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2 text-paper">
             <LogoMark size={26} />
             <span className="font-display text-lg font-bold tracking-[-0.02em]">JobMatch</span>
           </Link>
           <div className="flex items-center gap-2">
-            <Bell />
+            <NotificationBell align="right" />
             <button type="button" onClick={handleSignOut} className="cursor-pointer text-sm text-fog">
               Sign out
             </button>
@@ -226,6 +155,7 @@ export default function Nav({ email, active }: { email?: string; active?: Active
           ))}
         </div>
       </div>
+      <ToastHost />
     </>
   );
 }

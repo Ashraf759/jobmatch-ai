@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
 import { BarList, Card, Columns, Loading, StatTile, formatDate, todayLabel, tone } from "@/components/ui";
+import { NoticeItem, useNotices } from "@/components/Notifications";
 
 type App = {
   id: string;
@@ -50,6 +51,7 @@ export default function DashboardPage() {
   const [resumes, setResumes] = useState<ResumeRow[]>([]);
   const [jobsCount, setJobsCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { notices, done, snooze } = useNotices();
   const router = useRouter();
   const supabase = createClient();
 
@@ -111,6 +113,11 @@ export default function DashboardPage() {
     .filter((a) => a.follow_up_date && a.follow_up_date <= in7 && !["offer", "rejected"].includes(a.status))
     .sort((a, b) => String(a.follow_up_date).localeCompare(String(b.follow_up_date)));
 
+  // Notification banner: only what needs action now
+  const urgent = notices.filter((n) => n.group === "overdue" || n.group === "today");
+  const overdueCount = notices.filter((n) => n.group === "overdue").length;
+  const todayCount = notices.filter((n) => n.group === "today").length;
+
   // Recent AI activity
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const activity = [
@@ -138,14 +145,36 @@ export default function DashboardPage() {
             <Link href="/resumes" className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-line px-4 text-sm font-medium hover:border-ink">
               Upload résumé
             </Link>
-            <Link href="/jobs" className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-line px-4 text-sm font-medium hover:border-ink">
-              Save a job
+            <Link href="/tracker" className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-line px-4 text-sm font-medium hover:border-ink">
+              Add application
             </Link>
             <Link href="/match" className="inline-flex min-h-11 items-center rounded-full bg-signal px-5 text-sm font-semibold text-white hover:-translate-y-px">
               Run AI Match
             </Link>
           </div>
         </div>
+
+        {/* ---------- Needs your attention ---------- */}
+        {urgent.length > 0 && (
+          <section className="flex animate-fade-in flex-col gap-3 rounded-3xl border-2 border-rust bg-rust-soft/50 p-5 md:p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rust opacity-60" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-rust" />
+              </span>
+              <h2 className="font-display text-[22px] font-bold tracking-[-0.02em] text-rust-ink">
+                {[overdueCount && `${overdueCount} follow-up${overdueCount === 1 ? "" : "s"} overdue`, todayCount && `${todayCount} due today`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {urgent.slice(0, 4).map((n) => (
+                <NoticeItem key={n.id} n={n} onDone={() => done(n)} onSnooze={() => snooze(n)} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ---------- Key numbers ---------- */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -249,7 +278,7 @@ export default function DashboardPage() {
         {/* ---------- Toolkit ---------- */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           {[
-            { href: "/jobs", t: "Job postings", d: `${jobsCount} saved` },
+            { href: "/tracker", t: "Applications", d: `${jobsCount} jobs saved` },
             { href: "/match", t: "AI Match", d: `${matches.length} results` },
             { href: "/ats", t: "ATS Scanner", d: `${atsScores.length} scans` },
             { href: "/tailor", t: "Tailoring Studio", d: `${reports.filter((r) => r.kind === "tailor").length} versions` },

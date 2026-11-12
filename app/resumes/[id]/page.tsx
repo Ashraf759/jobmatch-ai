@@ -320,7 +320,7 @@ export default function ResumeStudioPage() {
             Pick a saved job. In one click, JobMatch matches this résumé to it, runs the ATS check, rewrites your bullet points, and gives you a tailored copy as a Word file. The copy is also saved as a new version.
           </p>
           {jobs.length === 0 ? (
-            <EmptyState text="Save a job posting first." href="/jobs" cta="Add a job" />
+            <EmptyState text="Add a job first: in Applications, paste a job link." href="/tracker" cta="Add an application" />
           ) : (
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <select

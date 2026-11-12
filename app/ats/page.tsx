@@ -8,6 +8,7 @@ import { createClient } from "@/utils/supabase/client";
 import Nav from "@/components/Nav";
 import { Card, EmptyState, Loading, PageHeader, Sparkline, StatTile, formatDate, tone } from "@/components/ui";
 import { STEP_LABEL, runPipeline, type Step } from "@/utils/pipeline";
+import AtsCard from "@/components/AtsCard";
 
 type Category = { key: string; label: string; points: number; max: number };
 type Report = {
@@ -40,10 +41,31 @@ export default function AtsScannerPage() {
   const [resumeId, setResumeId] = useState("");
   const [jobId, setJobId] = useState("");
   const [step, setStep] = useState<Step | null>(null);
+  const [shownMatch, setShownMatch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
+
+  // Reload scan history (after a new scan)
+  async function loadReports() {
+    const [{ data: r }, { data: m }] = await Promise.all([
+      supabase
+        .from("ai_reports")
+        .select("id, match_id, score, is_demo, created_at, result")
+        .eq("kind", "ats")
+        .order("created_at", { ascending: false }),
+      supabase.from("match_results").select("id, resume_name, job_title, company"),
+    ]);
+    setReports((r ?? []) as Report[]);
+    setMatches(new Map(((m ?? []) as MatchInfo[]).map((x) => [x.id, x])));
+  }
+
+  // Show a scan's full result right here on this page
+  function show(matchId: string) {
+    setShownMatch(matchId);
+    setTimeout(() => document.getElementById("ats-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+  }
 
   useEffect(() => {
     async function load() {
@@ -85,12 +107,13 @@ export default function AtsScannerPage() {
     setError(null);
     try {
       const { matchId, warning } = await runPipeline(resumeId, jobId, setStep, { ats: true, tailor: false });
+      setStep(null);
       if (warning) {
         setError(warning);
-        setStep(null);
         return;
       }
-      router.push(`/match/${matchId}#ats`);
+      await loadReports();
+      show(matchId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The scan failed. Please try again.");
       setStep(null);
@@ -135,7 +158,7 @@ export default function AtsScannerPage() {
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
           <Card title="NEW SCAN">
             {resumes.length === 0 || jobs.length === 0 ? (
-              <EmptyState text="You need at least one résumé and one saved job to run a scan." href={resumes.length ? "/jobs" : "/resumes"} cta={resumes.length ? "Add a job" : "Upload a résumé"} />
+              <EmptyState text="You need at least one résumé and one saved job to run a scan." href={resumes.length ? "/tracker" : "/resumes"} cta={resumes.length ? "Add an application" : "Upload a résumé"} />
             ) : (
               <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_1fr_auto]">
                 <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
@@ -177,6 +200,30 @@ export default function AtsScannerPage() {
           </Card>
         </div>
 
+        {/* ---------- Result shown on this page ---------- */}
+        {shownMatch && (
+          <div id="ats-result" className="flex scroll-mt-6 flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <span className="font-mono text-[11px] tracking-[0.1em] text-muted">
+                SCAN RESULT ·{" "}
+                {(() => {
+                  const m = matches.get(shownMatch);
+                  return m ? `${m.job_title}${m.company ? ` · ${m.company}` : ""} · ${m.resume_name}`.toUpperCase() : "";
+                })()}
+              </span>
+              <div className="flex gap-3">
+                <Link href={`/match/${shownMatch}`} className="text-[13px] font-semibold text-signal">
+                  Full match result ↗
+                </Link>
+                <button type="button" onClick={() => setShownMatch(null)} className="cursor-pointer text-[13px] text-muted hover:text-ink">
+                  Close
+                </button>
+              </div>
+            </div>
+            <AtsCard key={shownMatch} matchId={shownMatch} canRun />
+          </div>
+        )}
+
         <Card title={`SCAN HISTORY · ${reports.length}`}>
           {reports.length === 0 && <EmptyState text="No scans yet. Run your first one above." />}
           <div className="flex flex-col gap-2">
@@ -187,10 +234,13 @@ export default function AtsScannerPage() {
               const weak = [...cats].sort((a, b) => a.points / a.max - b.points / b.max)[0];
               const kw = r.result?.keywords ?? [];
               return (
-                <Link
+                <button
                   key={r.id}
-                  href={`/match/${r.match_id}#ats`}
-                  className="flex flex-wrap items-center gap-4 rounded-2xl border-[1.5px] border-paper-2 bg-card px-4 py-3 transition hover:border-line hover:shadow-[0_10px_24px_-18px_rgba(20,22,27,0.45)]"
+                  type="button"
+                  onClick={() => show(r.match_id)}
+                  className={`flex w-full cursor-pointer flex-wrap items-center gap-4 rounded-2xl border-[1.5px] bg-card px-4 py-3 text-left transition hover:border-line hover:shadow-[0_10px_24px_-18px_rgba(20,22,27,0.45)] ${
+                    shownMatch === r.match_id ? "border-signal" : "border-paper-2"
+                  }`}
                 >
                   <span className={`flex h-11 w-14 shrink-0 items-center justify-center rounded-xl font-display text-lg font-bold ${t.soft} ${t.text}`}>{r.score}</span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -208,8 +258,8 @@ export default function AtsScannerPage() {
                     </span>
                   )}
                   {weak && <span className="hidden rounded-full bg-paper-2 px-3 py-1 text-[12px] text-ink-2 md:inline">Fix: {weak.label}</span>}
-                  <span className="text-sm font-semibold text-signal">Open →</span>
-                </Link>
+                  <span className="text-sm font-semibold text-signal">{shownMatch === r.match_id ? "Showing ↑" : "View"}</span>
+                </button>
               );
             })}
           </div>

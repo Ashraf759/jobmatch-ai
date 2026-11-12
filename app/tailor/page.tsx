@@ -112,12 +112,21 @@ export default function TailoringStudioPage() {
           <StatTile label="Tailored versions" value={reports.length} />
           <StatTile label="Bullet points rewritten" value={totalRewrites} />
           <StatTile label="Companies targeted" value={companies} />
-          <StatTile label="Cost per tailoring" value="< 1¢" hint="Within the daily limit" dark accent="text-mint" />
+          <StatTile
+            label="Average match"
+            value={(() => {
+              const scores = reports.map((r) => matches.get(r.match_id)?.score).filter((x): x is number => typeof x === "number");
+              return scores.length ? `${Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)}%` : "—";
+            })()}
+            hint="for the jobs you tailored to"
+            dark
+            accent="text-mint"
+          />
         </div>
 
         <Card title="TAILOR A RÉSUMÉ">
           {resumes.length === 0 || jobs.length === 0 ? (
-            <EmptyState text="You need at least one résumé and one saved job to tailor." href={resumes.length ? "/jobs" : "/resumes"} cta={resumes.length ? "Add a job" : "Upload a résumé"} />
+            <EmptyState text="You need at least one résumé and one saved job to tailor." href={resumes.length ? "/tracker" : "/resumes"} cta={resumes.length ? "Add an application" : "Upload a résumé"} />
           ) : (
             <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_1fr_auto]">
               <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
